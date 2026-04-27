@@ -3,7 +3,8 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { Home, Users, Calendar, Scissors, Package, BarChart, Star, Settings, LogOut, KeyRound } from 'lucide-react'
+import { Home, Users, Calendar, Scissors, Package, BarChart, Star, Settings, LogOut, KeyRound, Sun, Moon } from 'lucide-react'
+import { useTheme } from '@/components/ThemeProvider'
 import type { Permissions } from '@/lib/permissions'
 
 const NAV_ITEMS = [
@@ -17,15 +18,10 @@ const NAV_ITEMS = [
   { icon: Settings, label: '系統設定', href: '/settings',    key: 'settings'     },
 ] as const
 
-export default function Sidebar({
-  permissions,
-  userName,
-}: {
-  permissions: Permissions | null
-  userName: string
-}) {
+export default function Sidebar({ permissions, userName }: { permissions: Permissions | null; userName: string }) {
   const pathname = usePathname()
   const router = useRouter()
+  const { theme, toggle } = useTheme()
   const [showPwModal, setShowPwModal] = useState(false)
   const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' })
   const [pwError, setPwError] = useState('')
@@ -46,26 +42,19 @@ export default function Sidebar({
       body: JSON.stringify({ currentPassword: pwForm.current, newPassword: pwForm.next }),
     })
     setPwSaving(false)
-    if (res.ok) {
-      setShowPwModal(false)
-      setPwForm({ current: '', next: '', confirm: '' })
-    } else {
-      const data = await res.json()
-      setPwError(data.error ?? '發生錯誤')
-    }
+    if (res.ok) { setShowPwModal(false); setPwForm({ current: '', next: '', confirm: '' }) }
+    else { const d = await res.json(); setPwError(d.error ?? '發生錯誤') }
   }
 
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => !permissions || permissions[item.key as keyof Permissions]
-  )
+  const visibleItems = NAV_ITEMS.filter(item => !permissions || permissions[item.key as keyof Permissions])
 
   return (
     <>
-      <aside className="w-56 h-screen bg-[#0D0D0F] border-r border-[#1E1E22] flex flex-col shrink-0">
+      <aside className="w-56 h-screen flex flex-col shrink-0 bg-[var(--t-surface)] border-r border-[var(--t-border)]">
         {/* Brand */}
-        <div className="px-6 py-7 border-b border-[#1E1E22]">
-          <p className="text-[9px] tracking-[0.3em] text-[#C9A96E] uppercase mb-1">Ada Studio</p>
-          <h1 className="text-sm font-light text-[#F4F0E8] tracking-widest">慢療室</h1>
+        <div className="px-6 py-7 border-b border-[var(--t-border)]">
+          <p className="text-[9px] tracking-[0.3em] text-[var(--t-gold)] uppercase mb-1">Ada Studio</p>
+          <h1 className="text-sm font-light text-[var(--t-text)] tracking-widest">慢療室</h1>
         </div>
 
         {/* Nav */}
@@ -73,14 +62,12 @@ export default function Sidebar({
           {visibleItems.map(({ icon: Icon, label, href }) => {
             const isActive = pathname === href
             return (
-              <Link
-                key={href}
-                href={href}
-                className={
+              <Link key={href} href={href}
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs transition-colors ${
                   isActive
-                    ? 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs font-medium text-[#C9A96E] bg-[#C9A96E]/8 transition-colors'
-                    : 'flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs text-[#6A6460] hover:text-[#A09890] hover:bg-[#18181B] transition-colors'
-                }
+                    ? 'font-medium text-[var(--t-gold)] bg-[var(--t-gold-bg)]'
+                    : 'text-[var(--t-text-3)] hover:text-[var(--t-text-2)] hover:bg-[var(--t-elevated)]'
+                }`}
               >
                 <Icon size={14} strokeWidth={isActive ? 2 : 1.5} />
                 {label}
@@ -90,32 +77,33 @@ export default function Sidebar({
         </nav>
 
         {/* Footer */}
-        <div className="px-3 py-4 border-t border-[#1E1E22]">
-          <p className="text-[10px] text-[#3A3A40] px-3 mb-2 truncate">{userName}</p>
-          <button
-            onClick={() => setShowPwModal(true)}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-xs text-[#6A6460] hover:text-[#A09890] hover:bg-[#18181B] transition-colors"
-          >
-            <KeyRound size={14} strokeWidth={1.5} />
-            修改密碼
-          </button>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-xs text-[#6A6460] hover:text-[#A09890] hover:bg-[#18181B] transition-colors"
-          >
-            <LogOut size={14} strokeWidth={1.5} />
-            登出
-          </button>
+        <div className="px-3 py-4 border-t border-[var(--t-border)]">
+          <div className="flex items-center justify-between px-3 mb-2">
+            <p className="text-[10px] text-[var(--t-text-4)] truncate flex-1 mr-2">{userName}</p>
+            <button onClick={toggle} className="text-[var(--t-text-4)] hover:text-[var(--t-gold)] transition-colors flex-shrink-0">
+              {theme === 'dark' ? <Sun size={13} strokeWidth={1.5} /> : <Moon size={13} strokeWidth={1.5} />}
+            </button>
+          </div>
+          {[
+            { icon: KeyRound, label: '修改密碼', onClick: () => setShowPwModal(true) },
+            { icon: LogOut,   label: '登出',     onClick: handleLogout },
+          ].map(({ icon: Icon, label, onClick }) => (
+            <button key={label} onClick={onClick}
+              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-xs text-[var(--t-text-3)] hover:text-[var(--t-text-2)] hover:bg-[var(--t-elevated)] transition-colors"
+            >
+              <Icon size={14} strokeWidth={1.5} />
+              {label}
+            </button>
+          ))}
         </div>
       </aside>
 
-      {/* Change password modal */}
       {showPwModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#111113] border border-[#2E2E33] rounded-2xl w-full max-w-sm p-7">
+          <div className="bg-[var(--t-surface)] border border-[var(--t-border-s)] rounded-2xl w-full max-w-sm p-7">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-medium text-[#F4F0E8] tracking-wide">修改密碼</h3>
-              <button onClick={() => { setShowPwModal(false); setPwError('') }} className="text-[#3A3A40] hover:text-[#A09890] text-xl leading-none transition-colors">×</button>
+              <h3 className="text-sm font-medium text-[var(--t-text)] tracking-wide">修改密碼</h3>
+              <button onClick={() => { setShowPwModal(false); setPwError('') }} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-xl leading-none transition-colors">×</button>
             </div>
             {[
               { label: '目前密碼', key: 'current' },
@@ -123,20 +111,17 @@ export default function Sidebar({
               { label: '確認新密碼', key: 'confirm' },
             ].map(({ label, key }) => (
               <div key={key} className="mb-4">
-                <label className="text-[10px] text-[#6A6460] tracking-widest uppercase mb-1.5 block">{label}</label>
-                <input
-                  type="password"
-                  className="w-full bg-[#18181B] border border-[#2E2E33] focus:border-[#C9A96E] focus:outline-none rounded-xl px-4 py-2.5 text-sm text-[#F4F0E8] transition-colors"
+                <label className="text-[10px] text-[var(--t-text-3)] tracking-widest uppercase mb-1.5 block">{label}</label>
+                <input type="password"
+                  className="w-full bg-[var(--t-elevated)] border border-[var(--t-border-s)] focus:border-[var(--t-gold)] focus:outline-none rounded-xl px-4 py-2.5 text-sm text-[var(--t-text)] transition-colors"
                   value={pwForm[key as keyof typeof pwForm]}
                   onChange={(e) => setPwForm({ ...pwForm, [key]: e.target.value })}
                 />
               </div>
             ))}
             {pwError && <p className="text-xs text-[#B57070] mb-4">{pwError}</p>}
-            <button
-              onClick={handleChangePassword}
-              disabled={pwSaving}
-              className="w-full bg-[#C9A96E] hover:bg-[#D4B87A] disabled:opacity-50 text-[#0D0D0F] rounded-xl py-2.5 text-xs font-medium tracking-wider mt-2 transition-colors"
+            <button onClick={handleChangePassword} disabled={pwSaving}
+              className="w-full mt-2 bg-[var(--t-gold)] hover:bg-[var(--t-gold-h)] disabled:opacity-50 text-[var(--t-gold-fg)] rounded-xl py-2.5 text-xs font-medium tracking-wider transition-colors"
             >
               {pwSaving ? '更新中...' : '更新密碼'}
             </button>

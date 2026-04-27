@@ -99,6 +99,42 @@
   --sidebar-ring: oklch(0.720 0.069 70);    /* Latte #C9A87C */
 }
 
+/* ── Ada theme tokens ─────────────────────────────── */
+.dark {
+  --t-bg:            #0D0D0F;
+  --t-surface:       #111113;
+  --t-elevated:      #18181B;
+  --t-border:        #1E1E22;
+  --t-border-s:      #2E2E33;
+  --t-text:          #F4F0E8;
+  --t-text-2:        #A09890;
+  --t-text-3:        #6A6460;
+  --t-text-4:        #3A3A40;
+  --t-gold:          #C9A96E;
+  --t-gold-h:        #D4B87A;
+  --t-gold-bg:       rgba(201,169,110,0.08);
+  --t-gold-fg:       #0D0D0F;
+  --t-glow:          rgba(201,169,110,0.06);
+}
+
+.light {
+  --t-bg:            #F5F3EE;
+  --t-surface:       #FFFFFF;
+  --t-elevated:      #EDEAE4;
+  --t-border:        #E0DAD2;
+  --t-border-s:      #C8C0B6;
+  --t-text:          #1C1917;
+  --t-text-2:        #6B6560;
+  --t-text-3:        #9A948E;
+  --t-text-4:        #C4BEB8;
+  --t-gold:          #96722E;
+  --t-gold-h:        #A87C38;
+  --t-gold-bg:       rgba(150,114,46,0.08);
+  --t-gold-fg:       #FFFFFF;
+  --t-glow:          rgba(150,114,46,0.04);
+}
+/* ───────────────────────────────────────────────── */
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
