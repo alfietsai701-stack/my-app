@@ -15,6 +15,7 @@ model Customer {
   birthday     DateTime?
   note         String?
   createdAt    DateTime      @default(now())
+  deletedAt    DateTime?
   appointments Appointment[]
   member       Member?
 }
