@@ -9,7 +9,7 @@ export default async function DashboardLayout({
   const session = await getSession()
 
   return (
-    <div className="flex h-screen bg-[#F5F0E8] overflow-hidden">
+    <div className="flex h-screen bg-[#0D0D0F] overflow-hidden">
       <Sidebar permissions={session?.permissions ?? null} userName={session?.name ?? ''} />
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {children}
