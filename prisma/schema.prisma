@@ -67,3 +67,12 @@ model Member {
   joinedAt   DateTime @default(now())
   customer   Customer @relation(fields: [customerId], references: [id])
 }
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  permissions  Json     @default("{}")
+  createdAt    DateTime @default(now())
+}
