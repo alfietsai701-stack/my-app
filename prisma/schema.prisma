@@ -1,0 +1,68 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Customer {
+  id           String        @id @default(cuid())
+  name         String
+  phone        String        @unique
+  birthday     DateTime?
+  note         String?
+  createdAt    DateTime      @default(now())
+  appointments Appointment[]
+  member       Member?
+}
+
+model Service {
+  id           String        @id @default(cuid())
+  name         String
+  price        Int
+  durationMin  Int
+  category     String
+  appointments Appointment[]
+}
+
+model Appointment {
+  id          String    @id @default(cuid())
+  customerId  String
+  serviceId   String
+  scheduledAt DateTime
+  status      String    @default("confirmed")
+  note        String?
+  createdAt   DateTime  @default(now())
+  customer    Customer  @relation(fields: [customerId], references: [id])
+  service     Service   @relation(fields: [serviceId], references: [id])
+  receipt     Receipt?
+}
+
+model Receipt {
+  id            String      @id @default(cuid())
+  appointmentId String      @unique
+  total         Int
+  payMethod     String
+  paidAt        DateTime    @default(now())
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+}
+
+model InventoryItem {
+  id         String @id @default(cuid())
+  name       String
+  quantity   Int
+  alertLevel Int
+  unit       String
+}
+
+model Member {
+  id         String   @id @default(cuid())
+  customerId String   @unique
+  tier       String   @default("general")
+  points     Int      @default(0)
+  joinedAt   DateTime @default(now())
+  customer   Customer @relation(fields: [customerId], references: [id])
+}
