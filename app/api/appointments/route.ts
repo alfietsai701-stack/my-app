@@ -3,13 +3,14 @@ import { prisma } from '@/lib/prisma'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl
-  const date = searchParams.get('date') // YYYY-MM-DD
+  const date  = searchParams.get('date')  // YYYY-MM-DD
+  const month = searchParams.get('month') // YYYY-MM
   const where = date ? {
-    scheduledAt: {
-      gte: new Date(`${date}T00:00:00`),
-      lte: new Date(`${date}T23:59:59`),
-    },
-  } : {}
+    scheduledAt: { gte: new Date(`${date}T00:00:00`), lte: new Date(`${date}T23:59:59`) },
+  } : month ? (() => {
+    const [y, m] = month.split('-').map(Number)
+    return { scheduledAt: { gte: new Date(y, m - 1, 1), lte: new Date(y, m, 0, 23, 59, 59) } }
+  })() : {}
 
   const appointments = await prisma.appointment.findMany({
     where,
