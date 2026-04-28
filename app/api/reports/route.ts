@@ -1,81 +1,89 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const monthParam = req.nextUrl.searchParams.get('month') // YYYY-MM
   const now = new Date()
-  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+  const [y, m] = monthParam
+    ? monthParam.split('-').map(Number)
+    : [now.getFullYear(), now.getMonth() + 1]
 
-  // Last 6 months range
-  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1)
+  const start = new Date(y, m - 1, 1)
+  const end   = new Date(y, m, 0, 23, 59, 59)
+  const prevStart = new Date(y, m - 2, 1)
+  const prevEnd   = new Date(y, m - 1, 0, 23, 59, 59)
 
   const [
-    receiptsThisMonth,
-    receiptsLastMonth,
-    appointmentsThisMonth,
-    appointmentsLastMonth,
-    receipts6m,
-    allAppointments,
+    receipts, prevReceipts,
+    appts, prevAppts,
+    allAppts,
   ] = await Promise.all([
-    prisma.receipt.findMany({ where: { paidAt: { gte: thisMonthStart } }, include: { appointment: { include: { service: true } } } }),
-    prisma.receipt.findMany({ where: { paidAt: { gte: lastMonthStart, lte: lastMonthEnd } } }),
-    prisma.appointment.count({ where: { scheduledAt: { gte: thisMonthStart } } }),
-    prisma.appointment.count({ where: { scheduledAt: { gte: lastMonthStart, lte: lastMonthEnd } } }),
-    prisma.receipt.findMany({ where: { paidAt: { gte: sixMonthsAgo } }, include: { appointment: { include: { service: true } } } }),
-    prisma.appointment.findMany({ where: { scheduledAt: { gte: sixMonthsAgo } }, include: { service: true, receipt: true } }),
+    prisma.receipt.findMany({
+      where: { paidAt: { gte: start, lte: end } },
+      include: { appointment: { include: { service: true } } },
+    }),
+    prisma.receipt.findMany({ where: { paidAt: { gte: prevStart, lte: prevEnd } } }),
+    prisma.appointment.findMany({
+      where: { scheduledAt: { gte: start, lte: end } },
+      include: { service: true },
+    }),
+    prisma.appointment.count({ where: { scheduledAt: { gte: prevStart, lte: prevEnd }, status: { not: 'cancelled' } } }),
+    // full year for trend (last 12 months)
+    prisma.receipt.findMany({
+      where: { paidAt: { gte: new Date(y, m - 13, 1) } },
+      include: { appointment: { include: { service: true } } },
+    }),
   ])
 
-  // Revenue by month (last 6 months)
-  const monthlyRevenue: Record<string, number> = {}
-  const monthlyAppointments: Record<string, number> = {}
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
-    const key = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`
-    monthlyRevenue[key] = 0
-    monthlyAppointments[key] = 0
-  }
-  receipts6m.forEach(r => {
-    const d = new Date(r.paidAt)
-    const key = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`
-    if (key in monthlyRevenue) monthlyRevenue[key] += r.total
-  })
-  allAppointments.forEach(a => {
-    const d = new Date(a.scheduledAt)
-    const key = `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}`
-    if (key in monthlyAppointments) monthlyAppointments[key] = (monthlyAppointments[key] || 0) + 1
-  })
+  const revenue = receipts.reduce((s, r) => s + r.total, 0)
+  const prevRevenue = prevReceipts.reduce((s, r) => s + r.total, 0)
+  const apptCount = appts.filter(a => a.status !== 'cancelled').length
+  const completedCount = appts.filter(a => a.status === 'completed').length
+  const avgTicket = completedCount > 0 ? Math.round(revenue / completedCount) : 0
 
-  // Top services
-  const serviceCount: Record<string, { name: string; count: number; revenue: number }> = {}
-  receipts6m.forEach(r => {
+  // Service breakdown
+  const svcMap: Record<string, { name: string; category: string; count: number; revenue: number }> = {}
+  receipts.forEach(r => {
     const svc = r.appointment.service
-    if (!serviceCount[svc.id]) serviceCount[svc.id] = { name: svc.name, count: 0, revenue: 0 }
-    serviceCount[svc.id].count += 1
-    serviceCount[svc.id].revenue += r.total
+    if (!svcMap[svc.id]) svcMap[svc.id] = { name: svc.name, category: svc.category, count: 0, revenue: 0 }
+    svcMap[svc.id].count += 1
+    svcMap[svc.id].revenue += r.total
   })
-  const topServices = Object.values(serviceCount).sort((a, b) => b.count - a.count).slice(0, 5)
+  const services = Object.values(svcMap).sort((a, b) => b.revenue - a.revenue)
 
-  // Pay method breakdown
-  const payMethods: Record<string, number> = {}
-  receiptsThisMonth.forEach(r => {
-    payMethods[r.payMethod] = (payMethods[r.payMethod] || 0) + r.total
+  // Category breakdown
+  const catMap: Record<string, { count: number; revenue: number }> = {}
+  services.forEach(s => {
+    if (!catMap[s.category]) catMap[s.category] = { count: 0, revenue: 0 }
+    catMap[s.category].count += s.count
+    catMap[s.category].revenue += s.revenue
   })
+  const categories = Object.entries(catMap)
+    .map(([name, v]) => ({ name, ...v, pct: revenue > 0 ? Math.round((v.revenue / revenue) * 100) : 0 }))
+    .sort((a, b) => b.revenue - a.revenue)
 
-  const revenueThisMonth = receiptsThisMonth.reduce((s, r) => s + r.total, 0)
-  const revenueLastMonth = receiptsLastMonth.reduce((s, r) => s + r.total, 0)
+  // Monthly trend (12 months)
+  const trend: Record<string, { revenue: number; count: number }> = {}
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(y, m - 1 - i, 1)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    trend[key] = { revenue: 0, count: 0 }
+  }
+  allAppts.forEach(r => {
+    const d = new Date(r.paidAt)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    if (key in trend) { trend[key].revenue += r.total; trend[key].count += 1 }
+  })
+  const trendData = Object.entries(trend).map(([month, v]) => ({
+    month: month.slice(5) + '月',
+    fullMonth: month,
+    ...v,
+  }))
 
   return NextResponse.json({
-    revenueThisMonth,
-    revenueLastMonth,
-    appointmentsThisMonth,
-    appointmentsLastMonth,
-    monthlyRevenue: Object.entries(monthlyRevenue).map(([month, revenue]) => ({
-      month: month.slice(5) + '月',
-      revenue,
-      appointments: monthlyAppointments[month] || 0,
-    })),
-    topServices,
-    payMethods: Object.entries(payMethods).map(([method, total]) => ({ method, total })),
+    month: `${y}-${String(m).padStart(2, '0')}`,
+    revenue, prevRevenue,
+    apptCount, prevAppts, completedCount, avgTicket,
+    services, categories, trendData,
   })
 }
