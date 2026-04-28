@@ -1,11 +1,6 @@
 import { Calendar, Users, TrendingUp, Package } from 'lucide-react'
-
-const statsCards = [
-  { label: '本月收入',   value: 'NT$ 28,500', sub: '較上月 +12%',   icon: TrendingUp, accent: true },
-  { label: '本月預約',   value: '48 筆',       sub: '已完成 36 筆',  icon: Calendar               },
-  { label: '顧客總數',   value: '124 位',      sub: '本月新增 8 位', icon: Users                  },
-  { label: '低庫存品項', value: '3 項',        sub: '需補貨',        icon: Package,    warn: true  },
-]
+import Link from 'next/link'
+import { prisma } from '@/lib/prisma'
 
 const recentAppointments = [
   { name: '王小明', service: '臉部保養', time: '今日 10:00', status: 'confirmed' },
@@ -20,7 +15,17 @@ const statusConfig: Record<string, { label: string; style: string }> = {
   cancelled:  { label: '已取消', style: 'text-[#A06060] border border-[rgba(160,96,96,0.2)]' },
 }
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const inventoryItems = await prisma.inventoryItem.findMany({ select: { quantity: true, alertLevel: true } })
+  const lowStockCount = inventoryItems.filter(i => i.quantity <= i.alertLevel).length
+
+  const statsCards = [
+    { label: '本月收入',   value: 'NT$ 28,500', sub: '較上月 +12%',   icon: TrendingUp, accent: true,  href: '/reports'   },
+    { label: '本月預約',   value: '48 筆',       sub: '已完成 36 筆',  icon: Calendar,                  href: '/appointments' },
+    { label: '顧客總數',   value: '124 位',      sub: '本月新增 8 位', icon: Users,                     href: '/customers' },
+    { label: '低庫存品項', value: `${lowStockCount} 項`, sub: lowStockCount > 0 ? '需補貨' : '庫存充足', icon: Package, warn: lowStockCount > 0, href: '/inventory' },
+  ]
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <header className="h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-center justify-between px-8 shrink-0">
@@ -33,8 +38,9 @@ export default function DashboardPage() {
       <main className="flex-1 bg-[var(--t-bg)] p-8 overflow-auto">
         {/* Stats */}
         <div className="grid grid-cols-4 gap-5 mb-10">
-          {statsCards.map(({ label, value, sub, icon: Icon, accent, warn }) => (
-            <div key={label} className="bg-[var(--t-surface)] border border-[var(--t-border)] p-6">
+          {statsCards.map(({ label, value, sub, icon: Icon, accent, warn, href }) => (
+            <Link key={label} href={href}
+              className="bg-[var(--t-surface)] border border-[var(--t-border)] p-6 hover:border-[var(--t-border-s)] transition-colors group block">
               <div className="flex items-start justify-between mb-5">
                 <p className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase leading-relaxed">{label}</p>
                 <Icon size={13} strokeWidth={1.5} className={warn ? 'text-[#A06060]' : 'text-[var(--t-accent)]'} />
@@ -45,7 +51,7 @@ export default function DashboardPage() {
                 {value}
               </p>
               <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">{sub}</p>
-            </div>
+            </Link>
           ))}
         </div>
 
