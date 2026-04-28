@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
-import { replyText, replyQuickReply, sendLineMessage } from '@/lib/line'
+import { replyText, replyImage, replyQuickReply, sendLineMessage } from '@/lib/line'
+
+const BASE_URL = process.env.NEXTAUTH_URL?.replace('http://localhost:3000', 'https://my-app-taupe-three-92.vercel.app') ?? 'https://my-app-taupe-three-92.vercel.app'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -249,34 +251,11 @@ async function handleConfirm(token: string, lineUserId: string, data: BookingDat
 // ── Menu handlers ─────────────────────────────────────────────────────────────
 
 async function handlePriceList(token: string) {
-  const services = await prisma.service.findMany({ orderBy: [{ category: 'asc' }, { price: 'asc' }] })
-  const grouped: Record<string, typeof services> = {}
-  services.forEach(s => {
-    if (!grouped[s.category]) grouped[s.category] = []
-    grouped[s.category].push(s)
-  })
-  const lines = ['💆 Ada 慢療室 服務價目表', '']
-  for (const [cat, svcs] of Object.entries(grouped)) {
-    lines.push(`【${cat}】`)
-    svcs.forEach(s => lines.push(`${s.name}\n  ${s.durationMin}分鐘｜NT$ ${s.price.toLocaleString()}`))
-    lines.push('')
-  }
-  lines.push('如需預約請點選下方「線上預約」')
-  await replyText(token, lines.join('\n'))
+  await replyImage(token, `${BASE_URL}/price-list.png`)
 }
 
 async function handleNotes(token: string) {
-  await replyText(token, [
-    '📋 預約注意事項',
-    '',
-    '1. 請提前 5 分鐘到達，以便換裝及填寫問卷',
-    '2. 療程前請避免大量進食',
-    '3. 如需取消或更改，請於 24 小時前來電告知',
-    '4. 懷孕、特殊疾病或皮膚異常者，請事先告知',
-    '5. 療程後建議多補充水分',
-    '',
-    '📞 如有任何疑問，歡迎直接來電洽詢',
-  ].join('\n'))
+  await replyImage(token, `${BASE_URL}/booking-notes.png`)
 }
 
 async function handlePromotion(token: string) {

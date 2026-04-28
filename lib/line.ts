@@ -31,6 +31,17 @@ export async function replyText(replyToken: string, text: string) {
   })
 }
 
+export async function replyImage(replyToken: string, imageUrl: string) {
+  await fetch(LINE_REPLY_API, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({
+      replyToken,
+      messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }],
+    }),
+  })
+}
+
 export async function replyQuickReply(
   replyToken: string,
   text: string,
