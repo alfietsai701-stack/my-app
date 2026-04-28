@@ -11,7 +11,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="zh-TW" className="h-full dark" suppressHydrationWarning>
+    <html lang="zh-TW" className="h-full light" suppressHydrationWarning>
       <body className="min-h-full flex flex-col antialiased">
         <ThemeProvider>{children}</ThemeProvider>
       </body>

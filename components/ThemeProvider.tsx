@@ -12,7 +12,7 @@ export default function ThemeProvider({ children }: { children: React.ReactNode 
 
   useEffect(() => {
     const saved = localStorage.getItem('ada-theme') as Theme | null
-    const initial = saved ?? 'dark'
+    const initial = saved ?? 'light'
     setTheme(initial)
     applyTheme(initial)
   }, [])

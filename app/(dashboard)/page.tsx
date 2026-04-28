@@ -1,10 +1,10 @@
 import { Calendar, Users, TrendingUp, Package } from 'lucide-react'
 
 const statsCards = [
-  { label: '本月收入',   value: 'NT$ 28,500', sub: '較上月 +12%',   icon: TrendingUp, accent: true  },
-  { label: '本月預約',   value: '48 筆',       sub: '已完成 36 筆',  icon: Calendar                  },
-  { label: '顧客總數',   value: '124 位',      sub: '本月新增 8 位', icon: Users                     },
-  { label: '低庫存品項', value: '3 項',        sub: '需補貨',        icon: Package,    warn: true    },
+  { label: '本月收入',   value: 'NT$ 28,500', sub: '較上月 +12%',   icon: TrendingUp, accent: true },
+  { label: '本月預約',   value: '48 筆',       sub: '已完成 36 筆',  icon: Calendar               },
+  { label: '顧客總數',   value: '124 位',      sub: '本月新增 8 位', icon: Users                  },
+  { label: '低庫存品項', value: '3 項',        sub: '需補貨',        icon: Package,    warn: true  },
 ]
 
 const recentAppointments = [
@@ -14,63 +14,64 @@ const recentAppointments = [
   { name: '林佳君', service: '臉部保養', time: '明日 15:30', status: 'confirmed' },
 ]
 
-const statusStyles: Record<string, string> = {
-  confirmed: 'bg-[rgba(201,169,110,0.1)] text-[#C9A96E]',
-  completed: 'bg-[rgba(104,168,119,0.1)] text-[#68A877]',
-  cancelled:  'bg-[rgba(181,112,112,0.1)] text-[#B57070]',
+const statusConfig: Record<string, { label: string; style: string }> = {
+  confirmed: { label: '已確認', style: 'text-[var(--t-accent)] border border-[var(--t-accent-bg)]' },
+  completed: { label: '已完成', style: 'text-[#6B9E78] border border-[rgba(107,158,120,0.2)]' },
+  cancelled:  { label: '已取消', style: 'text-[#A06060] border border-[rgba(160,96,96,0.2)]' },
 }
-const statusLabels: Record<string, string> = { confirmed: '已確認', completed: '已完成', cancelled: '已取消' }
 
 export default function DashboardPage() {
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <header className="h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-center justify-between px-8 shrink-0">
-        <h2 className="text-sm font-medium text-[var(--t-text)] tracking-wide">總覽</h2>
-        <button className="bg-[var(--t-gold)] hover:bg-[var(--t-gold-h)] text-[var(--t-gold-fg)] rounded-xl px-5 py-2 text-xs font-medium tracking-wider transition-colors">
+        <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-3)] uppercase">總覽</p>
+        <button className="border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">
           新增預約
         </button>
       </header>
 
       <main className="flex-1 bg-[var(--t-bg)] p-8 overflow-auto">
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        {/* Stats */}
+        <div className="grid grid-cols-4 gap-5 mb-10">
           {statsCards.map(({ label, value, sub, icon: Icon, accent, warn }) => (
-            <div key={label} className="bg-[var(--t-surface)] border border-[var(--t-border)] rounded-2xl p-5 hover:border-[var(--t-border-s)] transition-colors">
-              <div className="flex items-center justify-between mb-4">
-                <p className="text-[10px] text-[var(--t-text-3)] tracking-widest uppercase">{label}</p>
-                <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-[var(--t-gold-bg)]">
-                  <Icon size={13} className={warn ? 'text-[#B57070]' : 'text-[var(--t-gold)]'} strokeWidth={1.5} />
-                </div>
+            <div key={label} className="bg-[var(--t-surface)] border border-[var(--t-border)] p-6">
+              <div className="flex items-start justify-between mb-5">
+                <p className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase leading-relaxed">{label}</p>
+                <Icon size={13} strokeWidth={1.5} className={warn ? 'text-[#A06060]' : 'text-[var(--t-accent)]'} />
               </div>
-              <p className={`text-2xl font-light tracking-tight mb-1 ${warn ? 'text-[#B57070]' : accent ? 'text-[var(--t-gold)]' : 'text-[var(--t-text)]'}`}>
+              <p className={`text-[1.6rem] font-extralight tracking-tight leading-none mb-2 ${
+                warn ? 'text-[#A06060]' : accent ? 'text-[var(--t-accent)]' : 'text-[var(--t-text)]'
+              }`}>
                 {value}
               </p>
-              <p className="text-[10px] text-[var(--t-text-4)]">{sub}</p>
+              <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">{sub}</p>
             </div>
           ))}
         </div>
 
-        <div className="bg-[var(--t-surface)] border border-[var(--t-border)] rounded-2xl overflow-hidden">
-          <div className="px-7 py-5 border-b border-[var(--t-border)] flex items-center justify-between">
-            <h3 className="text-xs font-medium text-[var(--t-text)] tracking-widest uppercase">近期預約</h3>
-            <span className="text-[10px] text-[var(--t-text-4)] tracking-wider">4 筆</span>
+        {/* Recent appointments */}
+        <div className="bg-[var(--t-surface)] border border-[var(--t-border)]">
+          <div className="px-8 py-5 border-b border-[var(--t-border)] flex items-center justify-between">
+            <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-2)] uppercase">近期預約</p>
+            <span className="text-[10px] text-[var(--t-text-4)] tracking-wide">4 筆</span>
           </div>
           <table className="w-full">
             <thead>
               <tr className="border-b border-[var(--t-border)]">
                 {['顧客', '服務', '時間', '狀態'].map((h) => (
-                  <th key={h} className="text-left text-[10px] font-medium text-[var(--t-text-4)] tracking-widest uppercase px-7 py-3">{h}</th>
+                  <th key={h} className="text-left text-[10px] font-normal text-[var(--t-text-4)] tracking-[0.25em] uppercase px-8 py-3">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {recentAppointments.map((appt, i) => (
-                <tr key={i} className="border-b border-[var(--t-border)] last:border-0 hover:bg-[var(--t-elevated)] transition-colors">
-                  <td className="text-sm text-[var(--t-text)] font-light px-7 py-4">{appt.name}</td>
-                  <td className="text-xs text-[var(--t-text-2)] px-7 py-4">{appt.service}</td>
-                  <td className="text-xs text-[var(--t-text-3)] px-7 py-4">{appt.time}</td>
-                  <td className="px-7 py-4">
-                    <span className={`rounded-full px-3 py-1 text-[10px] font-medium tracking-wider ${statusStyles[appt.status]}`}>
-                      {statusLabels[appt.status]}
+                <tr key={i} className="border-b border-[var(--t-border)] last:border-0 hover:bg-[var(--t-bg)] transition-colors">
+                  <td className="text-sm font-light text-[var(--t-text)] px-8 py-4 tracking-wide">{appt.name}</td>
+                  <td className="text-xs text-[var(--t-text-2)] px-8 py-4 tracking-wide">{appt.service}</td>
+                  <td className="text-xs text-[var(--t-text-3)] px-8 py-4 tracking-wide">{appt.time}</td>
+                  <td className="px-8 py-4">
+                    <span className={`px-3 py-1 text-[10px] tracking-[0.15em] ${statusConfig[appt.status].style}`}>
+                      {statusConfig[appt.status].label}
                     </span>
                   </td>
                 </tr>

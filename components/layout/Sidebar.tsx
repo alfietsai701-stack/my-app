@@ -50,38 +50,45 @@ export default function Sidebar({ permissions, userName }: { permissions: Permis
 
   return (
     <>
-      <aside className="w-56 h-screen flex flex-col shrink-0 bg-[var(--t-surface)] border-r border-[var(--t-border)]">
+      <aside className="w-52 h-screen flex flex-col shrink-0 bg-[var(--t-sidebar)] border-r border-[var(--t-border)]">
         {/* Brand */}
-        <div className="px-6 py-7 border-b border-[var(--t-border)]">
-          <p className="text-[9px] tracking-[0.3em] text-[var(--t-gold)] uppercase mb-1">Ada Studio</p>
-          <h1 className="text-sm font-light text-[var(--t-text)] tracking-widest">慢療室</h1>
+        <div className="px-7 py-8">
+          <p className="text-[9px] tracking-[0.35em] text-[var(--t-accent)] uppercase mb-1.5">Ada Studio</p>
+          <h1 className="text-sm font-extralight text-[var(--t-text)] tracking-[0.2em]">慢療室</h1>
         </div>
 
+        <div className="h-px bg-[var(--t-border)] mx-7" />
+
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-4 py-5 space-y-0.5 overflow-y-auto">
           {visibleItems.map(({ icon: Icon, label, href }) => {
             const isActive = pathname === href
             return (
               <Link key={href} href={href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-xs transition-colors ${
+                className={`flex items-center gap-3 px-3 py-2.5 text-xs tracking-wide transition-colors relative ${
                   isActive
-                    ? 'font-medium text-[var(--t-gold)] bg-[var(--t-gold-bg)]'
-                    : 'text-[var(--t-text-3)] hover:text-[var(--t-text-2)] hover:bg-[var(--t-elevated)]'
+                    ? 'text-[var(--t-accent)]'
+                    : 'text-[var(--t-text-3)] hover:text-[var(--t-text-2)]'
                 }`}
               >
-                <Icon size={14} strokeWidth={isActive ? 2 : 1.5} />
+                {isActive && (
+                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-px h-4 bg-[var(--t-accent)]" />
+                )}
+                <Icon size={13} strokeWidth={isActive ? 1.75 : 1.5} />
                 {label}
               </Link>
             )
           })}
         </nav>
 
+        <div className="h-px bg-[var(--t-border)] mx-7" />
+
         {/* Footer */}
-        <div className="px-3 py-4 border-t border-[var(--t-border)]">
-          <div className="flex items-center justify-between px-3 mb-2">
-            <p className="text-[10px] text-[var(--t-text-4)] truncate flex-1 mr-2">{userName}</p>
-            <button onClick={toggle} className="text-[var(--t-text-4)] hover:text-[var(--t-gold)] transition-colors flex-shrink-0">
-              {theme === 'dark' ? <Sun size={13} strokeWidth={1.5} /> : <Moon size={13} strokeWidth={1.5} />}
+        <div className="px-4 py-5">
+          <div className="flex items-center justify-between px-3 mb-1">
+            <p className="text-[10px] text-[var(--t-text-4)] tracking-wide truncate flex-1 mr-2">{userName}</p>
+            <button onClick={toggle} className="text-[var(--t-text-4)] hover:text-[var(--t-accent)] transition-colors">
+              {theme === 'light' ? <Moon size={12} strokeWidth={1.5} /> : <Sun size={12} strokeWidth={1.5} />}
             </button>
           </div>
           {[
@@ -89,9 +96,9 @@ export default function Sidebar({ permissions, userName }: { permissions: Permis
             { icon: LogOut,   label: '登出',     onClick: handleLogout },
           ].map(({ icon: Icon, label, onClick }) => (
             <button key={label} onClick={onClick}
-              className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-xs text-[var(--t-text-3)] hover:text-[var(--t-text-2)] hover:bg-[var(--t-elevated)] transition-colors"
+              className="flex items-center gap-3 w-full px-3 py-2 text-xs text-[var(--t-text-4)] hover:text-[var(--t-text-2)] tracking-wide transition-colors"
             >
-              <Icon size={14} strokeWidth={1.5} />
+              <Icon size={12} strokeWidth={1.5} />
               {label}
             </button>
           ))}
@@ -99,35 +106,53 @@ export default function Sidebar({ permissions, userName }: { permissions: Permis
       </aside>
 
       {showPwModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--t-surface)] border border-[var(--t-border-s)] rounded-2xl w-full max-w-sm p-7">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-sm font-medium text-[var(--t-text)] tracking-wide">修改密碼</h3>
-              <button onClick={() => { setShowPwModal(false); setPwError('') }} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-xl leading-none transition-colors">×</button>
+        <Modal title="修改密碼" onClose={() => { setShowPwModal(false); setPwError('') }}>
+          {[
+            { label: '目前密碼', key: 'current' },
+            { label: '新密碼',   key: 'next'    },
+            { label: '確認新密碼', key: 'confirm' },
+          ].map(({ label, key }) => (
+            <div key={key} className="mb-5">
+              <FieldLabel>{label}</FieldLabel>
+              <input type="password"
+                className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] transition-colors"
+                value={pwForm[key as keyof typeof pwForm]}
+                onChange={(e) => setPwForm({ ...pwForm, [key]: e.target.value })}
+              />
             </div>
-            {[
-              { label: '目前密碼', key: 'current' },
-              { label: '新密碼',   key: 'next'    },
-              { label: '確認新密碼', key: 'confirm' },
-            ].map(({ label, key }) => (
-              <div key={key} className="mb-4">
-                <label className="text-[10px] text-[var(--t-text-3)] tracking-widest uppercase mb-1.5 block">{label}</label>
-                <input type="password"
-                  className="w-full bg-[var(--t-elevated)] border border-[var(--t-border-s)] focus:border-[var(--t-gold)] focus:outline-none rounded-xl px-4 py-2.5 text-sm text-[var(--t-text)] transition-colors"
-                  value={pwForm[key as keyof typeof pwForm]}
-                  onChange={(e) => setPwForm({ ...pwForm, [key]: e.target.value })}
-                />
-              </div>
-            ))}
-            {pwError && <p className="text-xs text-[#B57070] mb-4">{pwError}</p>}
-            <button onClick={handleChangePassword} disabled={pwSaving}
-              className="w-full mt-2 bg-[var(--t-gold)] hover:bg-[var(--t-gold-h)] disabled:opacity-50 text-[var(--t-gold-fg)] rounded-xl py-2.5 text-xs font-medium tracking-wider transition-colors"
-            >
-              {pwSaving ? '更新中...' : '更新密碼'}
-            </button>
-          </div>
-        </div>
+          ))}
+          {pwError && <p className="text-xs text-[#A05050] mb-4">{pwError}</p>}
+          <OutlineBtn onClick={handleChangePassword} loading={pwSaving}>更新密碼</OutlineBtn>
+        </Modal>
       )}
     </>
+  )
+}
+
+function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-[var(--t-surface)] border border-[var(--t-border)] w-full max-w-sm p-8">
+        <div className="flex items-center justify-between mb-8">
+          <p className="text-[10px] tracking-[0.3em] text-[var(--t-text-2)] uppercase">{title}</p>
+          <button onClick={onClose} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none transition-colors">×</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <p className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2">{children}</p>
+}
+
+function OutlineBtn({ children, onClick, loading }: { children: React.ReactNode; onClick: () => void; loading: boolean }) {
+  return (
+    <button onClick={onClick} disabled={loading}
+      className="w-full border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] disabled:opacity-40 py-2.5 text-[10px] tracking-[0.25em] uppercase transition-all duration-200"
+    >
+      {loading ? '處理中' : children}
+    </button>
   )
 }

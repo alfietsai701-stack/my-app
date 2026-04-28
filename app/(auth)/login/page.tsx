@@ -27,59 +27,65 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-[var(--t-bg)]">
-      <div className="absolute inset-0 pointer-events-none"
-        style={{ background: 'radial-gradient(ellipse at 50% 30%, var(--t-glow), transparent 70%)' }} />
-
-      <div className="relative w-full max-w-sm">
-        <div className="text-center mb-10">
-          <p className="text-[10px] tracking-[0.3em] text-[var(--t-gold)] uppercase mb-3">Ada Studio</p>
-          <h1 className="text-2xl font-light text-[var(--t-text)] tracking-wide">慢療室</h1>
-          <div className="mt-4 flex items-center gap-3">
-            <div className="flex-1 h-px" style={{ background: `linear-gradient(to right, transparent, var(--t-border-s))` }} />
-            <div className="w-1 h-1 rounded-full bg-[var(--t-gold)]" />
-            <div className="flex-1 h-px" style={{ background: `linear-gradient(to left, transparent, var(--t-border-s))` }} />
-          </div>
+    <div className="min-h-screen flex bg-[var(--t-bg)]">
+      {/* Left panel */}
+      <div className="hidden lg:flex w-1/2 bg-[var(--t-surface)] border-r border-[var(--t-border)] flex-col items-center justify-center p-16">
+        <div className="max-w-xs text-center">
+          <div className="w-px h-16 bg-[var(--t-border-s)] mx-auto mb-10" />
+          <p className="text-[10px] tracking-[0.4em] text-[var(--t-accent)] uppercase mb-4">Ada Studio</p>
+          <h1 className="text-3xl font-extralight text-[var(--t-text)] tracking-[0.15em] leading-relaxed mb-4">慢療室</h1>
+          <p className="text-xs text-[var(--t-text-3)] tracking-widest leading-loose">
+            以溫柔的節奏<br />守護每一位到來的人
+          </p>
+          <div className="w-px h-16 bg-[var(--t-border-s)] mx-auto mt-10" />
         </div>
+      </div>
 
-        <div className="bg-[var(--t-surface)] border border-[var(--t-border)] rounded-2xl p-8">
-          <p className="text-xs text-[var(--t-text-3)] tracking-widest uppercase mb-8">管理後台登入</p>
+      {/* Right panel */}
+      <div className="flex-1 flex items-center justify-center p-8">
+        <div className="w-full max-w-sm">
+          <div className="lg:hidden text-center mb-12">
+            <p className="text-[10px] tracking-[0.4em] text-[var(--t-accent)] uppercase mb-2">Ada Studio</p>
+            <h1 className="text-2xl font-extralight text-[var(--t-text)] tracking-[0.15em]">慢療室</h1>
+          </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-3)] uppercase mb-8">管理後台</p>
+
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="text-[10px] text-[var(--t-text-2)] tracking-widest uppercase mb-2 block">帳號</label>
+              <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">帳號</label>
               <input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 placeholder="your@email.com"
-                className="w-full bg-[var(--t-elevated)] border border-[var(--t-border-s)] focus:border-[var(--t-gold)] focus:outline-none rounded-xl px-4 py-3 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors"
+                className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2.5 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors"
               />
             </div>
             <div>
-              <label className="text-[10px] text-[var(--t-text-2)] tracking-widest uppercase mb-2 block">密碼</label>
+              <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">密碼</label>
               <input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 placeholder="••••••••"
-                className="w-full bg-[var(--t-elevated)] border border-[var(--t-border-s)] focus:border-[var(--t-gold)] focus:outline-none rounded-xl px-4 py-3 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors"
+                className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2.5 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors"
               />
             </div>
-            {error && <p className="text-xs text-[#B57070]">{error}</p>}
+            {error && <p className="text-xs text-[#A05050]">{error}</p>}
             <button
               type="submit"
               disabled={loading}
-              className="w-full mt-2 rounded-xl py-3 text-sm font-medium tracking-wide transition-colors disabled:opacity-50 bg-[var(--t-gold)] hover:bg-[var(--t-gold-h)] text-[var(--t-gold-fg)]"
+              className="w-full mt-4 border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] disabled:opacity-40 py-3 text-xs tracking-[0.25em] uppercase transition-all duration-200"
             >
-              {loading ? '登入中...' : '登入'}
+              {loading ? '登入中' : '登入'}
             </button>
           </form>
-        </div>
 
-        <p className="text-center text-[11px] text-[var(--t-text-4)] mt-6 tracking-wider">ADA STUDIO © 2026</p>
+          <p className="text-center text-[10px] text-[var(--t-text-4)] mt-12 tracking-[0.3em]">ADA STUDIO © 2026</p>
+        </div>
       </div>
     </div>
   )
