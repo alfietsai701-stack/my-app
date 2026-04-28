@@ -6,6 +6,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json()
   const data: Record<string, unknown> = {}
   if (body.name       !== undefined) data.name       = body.name
+  if (body.brand      !== undefined) data.brand      = body.brand || null
   if (body.category   !== undefined) data.category   = body.category
   if (body.unit       !== undefined) data.unit       = body.unit
   if (body.alertLevel !== undefined) data.alertLevel = Number(body.alertLevel)

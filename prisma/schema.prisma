@@ -54,6 +54,7 @@ model Receipt {
 model InventoryItem {
   id         String  @id @default(cuid())
   name       String
+  brand      String?
   category   String  @default("其他")
   quantity   Int
   alertLevel Int

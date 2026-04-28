@@ -3,12 +3,12 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Plus, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
 
-type Item = { id: string; name: string; category: string; quantity: number; alertLevel: number; unit: string; note: string | null }
+type Item = { id: string; name: string; brand: string | null; category: string; quantity: number; alertLevel: number; unit: string; note: string | null }
 type Entry = { id: string; itemId: string; itemName: string; unit: string; expected: number; actual: number }
 type Session = { id: string; createdAt: string; completedAt: string | null; note: string | null; entries: Entry[] }
 
 const CATEGORIES = ['保養品', '精油', '耗材', '其他'] as const
-const EMPTY = { name: '', category: CATEGORIES[0] as string, quantity: '', alertLevel: '', unit: '', note: '' }
+const EMPTY = { name: '', brand: '', category: CATEGORIES[0] as string, quantity: '', alertLevel: '', unit: '', note: '' }
 
 export default function InventoryPage() {
   const [items, setItems] = useState<Item[]>([])
@@ -48,7 +48,7 @@ export default function InventoryPage() {
 
   function openAdd() { setForm(EMPTY); setAdding(true) }
   function openEdit(item: Item) {
-    setForm({ name: item.name, category: item.category, quantity: String(item.quantity), alertLevel: String(item.alertLevel), unit: item.unit, note: item.note ?? '' })
+    setForm({ name: item.name, brand: item.brand ?? '', category: item.category, quantity: String(item.quantity), alertLevel: String(item.alertLevel), unit: item.unit, note: item.note ?? '' })
     setEditing(item)
   }
   function openAdjust(item: Item) { setAdjustDelta(''); setAdjusting(item) }
@@ -176,7 +176,9 @@ export default function InventoryPage() {
                           <tr key={item.id} className="border-b border-[var(--t-border)] last:border-0 hover:bg-[var(--t-bg)] transition-colors group">
                             <td className="px-7 py-4">
                               <p className="text-sm font-light text-[var(--t-text)] tracking-wide">{item.name}</p>
-                              {item.note && <p className="text-[10px] text-[var(--t-text-4)] tracking-wide mt-0.5">{item.note}</p>}
+                              <p className="text-[10px] text-[var(--t-text-4)] tracking-wide mt-0.5">
+                                {[item.brand, item.note].filter(Boolean).join('　·　')}
+                              </p>
                             </td>
                             <td className="px-7 py-4 text-right text-xs text-[var(--t-text-3)]">{item.unit}</td>
                             <td className="px-7 py-4 text-right text-xs text-[var(--t-text-3)] tabular-nums">{item.alertLevel}</td>
@@ -338,6 +340,7 @@ export default function InventoryPage() {
             </div>
             <div className="space-y-5">
               <Field label="品項名稱"><UInput value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="例：玻尿酸精華液" /></Field>
+              <Field label="品牌"><UInput value={form.brand} onChange={v => setForm({ ...form, brand: v })} placeholder="例：La Mer" /></Field>
               <Field label="類別">
                 <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
                   className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] transition-colors appearance-none cursor-pointer">
