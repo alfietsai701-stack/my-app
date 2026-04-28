@@ -11,22 +11,26 @@ export async function GET() {
 
 // Create a new draft session snapshotting current inventory
 export async function POST(req: NextRequest) {
-  const { note } = await req.json().catch(() => ({ note: undefined }))
-  const items = await prisma.inventoryItem.findMany({ orderBy: [{ category: 'asc' }, { name: 'asc' }] })
-  const session = await prisma.stockCheckSession.create({
-    data: {
-      note: note || null,
-      entries: {
-        create: items.map(item => ({
-          itemId: item.id,
-          itemName: item.name,
-          unit: item.unit,
-          expected: item.quantity,
-          actual: item.quantity,
-        })),
+  try {
+    const { note } = await req.json().catch(() => ({ note: undefined }))
+    const items = await prisma.inventoryItem.findMany({ orderBy: [{ category: 'asc' }, { name: 'asc' }] })
+    const session = await prisma.stockCheckSession.create({
+      data: {
+        note: note || null,
+        entries: {
+          create: items.map(item => ({
+            itemId: item.id,
+            itemName: item.name,
+            unit: item.unit,
+            expected: item.quantity,
+            actual: item.quantity,
+          })),
+        },
       },
-    },
-    include: { entries: true },
-  })
-  return NextResponse.json(session, { status: 201 })
+      include: { entries: true },
+    })
+    return NextResponse.json(session, { status: 201 })
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
 }
