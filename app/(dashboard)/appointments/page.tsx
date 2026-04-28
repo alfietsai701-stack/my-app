@@ -24,7 +24,7 @@ const STATUS_DOT: Record<string, string> = {
 const PAY_METHODS = ['現金', '信用卡', 'Line Pay', '轉帳']
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
-const toDateStr = (d: Date) => d.toISOString().slice(0, 10)
+const toDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 const toMonthStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
 const fmtDateLabel = (d: Date) => d.toLocaleDateString('zh-TW', { month: 'long', day: 'numeric', weekday: 'short' })
