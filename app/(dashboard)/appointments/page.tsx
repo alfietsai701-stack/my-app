@@ -90,8 +90,6 @@ export default function AppointmentsPage() {
   function selectDay(d: Date) {
     const s = toDateStr(d)
     setDate(s)
-    setView('day')
-    loadDay(s)
     setSelected(null)
   }
 
