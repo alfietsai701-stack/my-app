@@ -101,37 +101,37 @@
 
 /* ── Ada theme tokens ─────────────────────────────── */
 .light {
-  --t-bg:            #F7F5F1;
+  --t-bg:            #F4F1EC;
   --t-surface:       #FFFFFF;
-  --t-elevated:      #F0EDE8;
-  --t-sidebar:       #FAFAF8;
-  --t-border:        #E8E4DC;
-  --t-border-s:      #D4CEC6;
-  --t-text:          #1A1715;
-  --t-text-2:        #6B6560;
-  --t-text-3:        #9A948E;
-  --t-text-4:        #C4BEB8;
+  --t-elevated:      #EDE9E2;
+  --t-sidebar:       #F8F6F2;
+  --t-border:        #D8D2C8;
+  --t-border-s:      #C2BBB1;
+  --t-text:          #18140F;
+  --t-text-2:        #48433E;
+  --t-text-3:        #6E6860;
+  --t-text-4:        #A09890;
   --t-accent:        #8B7355;
   --t-accent-h:      #7A6347;
-  --t-accent-bg:     rgba(139,115,85,0.07);
+  --t-accent-bg:     rgba(139,115,85,0.08);
   --t-accent-fg:     #FFFFFF;
   --t-glow:          transparent;
 }
 
 .dark {
   --t-bg:            #111110;
-  --t-surface:       #191918;
-  --t-elevated:      #222220;
-  --t-sidebar:       #141413;
-  --t-border:        #2A2A28;
-  --t-border-s:      #3A3A38;
-  --t-text:          #F0EDE8;
-  --t-text-2:        #A09890;
-  --t-text-3:        #6A6460;
-  --t-text-4:        #3A3A38;
+  --t-surface:       #1A1918;
+  --t-elevated:      #232220;
+  --t-sidebar:       #151413;
+  --t-border:        #333230;
+  --t-border-s:      #464442;
+  --t-text:          #F2EEE8;
+  --t-text-2:        #B8B0A6;
+  --t-text-3:        #888078;
+  --t-text-4:        #524E4A;
   --t-accent:        #C4A882;
   --t-accent-h:      #D0B890;
-  --t-accent-bg:     rgba(196,168,130,0.08);
+  --t-accent-bg:     rgba(196,168,130,0.09);
   --t-accent-fg:     #111110;
   --t-glow:          rgba(196,168,130,0.04);
 }
