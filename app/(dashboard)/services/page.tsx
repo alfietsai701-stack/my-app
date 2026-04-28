@@ -4,7 +4,8 @@ import { useEffect, useState, useMemo } from 'react'
 import { Plus, Clock } from 'lucide-react'
 
 type Service = { id: string; name: string; price: number; durationMin: number; category: string }
-const EMPTY = { name: '', price: '', durationMin: '', category: '' }
+const CATEGORIES = ['身體按摩', '臉部護理', '特別療癒套組'] as const
+const EMPTY = { name: '', price: '', durationMin: '', category: CATEGORIES[0] }
 
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([])
@@ -12,7 +13,7 @@ export default function ServicesPage() {
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
-  const [filterCat, setFilterCat] = useState('全部')
+  const [filterCat, setFilterCat] = useState<'全部' | typeof CATEGORIES[number]>('全部')
 
   async function load() {
     const res = await fetch('/api/services')
@@ -20,10 +21,10 @@ export default function ServicesPage() {
   }
   useEffect(() => { load() }, [])
 
-  const categories = useMemo(() => ['全部', ...[...new Set(services.map(s => s.category))].sort()], [services])
   const filtered = filterCat === '全部' ? services : services.filter(s => s.category === filterCat)
   const grouped = useMemo(() => {
     const map: Record<string, Service[]> = {}
+    CATEGORIES.forEach(cat => { map[cat] = [] })
     filtered.forEach(s => { (map[s.category] ??= []).push(s) })
     return map
   }, [filtered])
@@ -67,20 +68,18 @@ export default function ServicesPage() {
 
       <main className="flex-1 bg-[var(--t-bg)] p-8 overflow-auto">
         {/* Category tabs */}
-        {categories.length > 1 && (
-          <div className="flex items-center gap-6 mb-8 border-b border-[var(--t-border)] pb-0">
-            {categories.map(cat => (
-              <button key={cat} onClick={() => setFilterCat(cat)}
-                className={`pb-3 text-[10px] tracking-[0.25em] uppercase border-b-[1.5px] -mb-px transition-colors ${
-                  filterCat === cat
-                    ? 'border-[var(--t-accent)] text-[var(--t-accent)]'
-                    : 'border-transparent text-[var(--t-text-3)] hover:text-[var(--t-text-2)]'
-                }`}>
-                {cat}
-              </button>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center gap-6 mb-8 border-b border-[var(--t-border)] pb-0">
+          {(['全部', ...CATEGORIES] as const).map(cat => (
+            <button key={cat} onClick={() => setFilterCat(cat)}
+              className={`pb-3 text-[10px] tracking-[0.25em] border-b-[1.5px] -mb-px transition-colors ${
+                filterCat === cat
+                  ? 'border-[var(--t-accent)] text-[var(--t-accent)]'
+                  : 'border-transparent text-[var(--t-text-3)] hover:text-[var(--t-text-2)]'
+              }`}>
+              {cat}
+            </button>
+          ))}
+        </div>
 
         {services.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-64 text-center">
@@ -89,24 +88,32 @@ export default function ServicesPage() {
           </div>
         ) : (
           <div className="space-y-8">
-            {Object.entries(grouped).map(([cat, items]) => (
+            {(filterCat === '全部' ? CATEGORIES : [filterCat]).map(cat => { const items = grouped[cat] ?? []; return (
               <div key={cat}>
                 <div className="flex items-center gap-4 mb-4">
-                  <p className="text-[10px] tracking-[0.3em] text-[var(--t-accent)] uppercase">{cat}</p>
+                  <p className="text-[10px] tracking-[0.3em] text-[var(--t-accent)]">{cat}</p>
                   <div className="flex-1 h-px bg-[var(--t-border)]" />
                   <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">{items.length} 項</p>
                 </div>
                 <div className="bg-[var(--t-surface)] border border-[var(--t-border)]">
-                  <table className="w-full">
+                  <table className="w-full table-fixed">
+                    <colgroup>
+                      <col className="w-auto" />
+                      <col style={{width:'120px'}} />
+                      <col style={{width:'140px'}} />
+                      <col style={{width:'96px'}} />
+                    </colgroup>
                     <thead>
                       <tr className="border-b border-[var(--t-border)]">
                         {['服務名稱', '時長', '定價', ''].map((h, i) => (
-                          <th key={i} className={`text-[10px] font-normal text-[var(--t-text-4)] tracking-[0.25em] uppercase py-3 ${i === 0 ? 'text-left px-7' : i === 3 ? 'w-24 px-7' : 'text-right px-7'}`}>{h}</th>
+                          <th key={i} className={`text-[10px] font-normal text-[var(--t-text-4)] tracking-[0.25em] uppercase py-3 ${i === 0 ? 'text-left px-7' : 'text-right px-7'}`}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {items.map((s) => (
+                      {items.length === 0 ? (
+                        <tr><td colSpan={4} className="px-7 py-6 text-[10px] text-[var(--t-text-4)] tracking-wide">尚無項目</td></tr>
+                      ) : items.map((s) => (
                         <tr key={s.id} className="border-b border-[var(--t-border)] last:border-0 hover:bg-[var(--t-bg)] transition-colors group">
                           <td className="px-7 py-4 text-sm font-light text-[var(--t-text)] tracking-wide">{s.name}</td>
                           <td className="px-7 py-4 text-right">
@@ -130,7 +137,7 @@ export default function ServicesPage() {
                   </table>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </main>
@@ -143,21 +150,28 @@ export default function ServicesPage() {
               <button onClick={() => { setAdding(false); setEditing(null) }} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none transition-colors">×</button>
             </div>
             <div className="space-y-6">
+              <div>
+                <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">服務名稱</label>
+                <input type="text" placeholder="例：深層修復" value={form.name}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors" />
+              </div>
+              <div>
+                <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">類別</label>
+                <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
+                  className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] transition-colors appearance-none cursor-pointer">
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
               {([
-                { label: '服務名稱',    key: 'name',        type: 'text',   placeholder: '例：臉部保養' },
-                { label: '類別',        key: 'category',    type: 'text',   placeholder: '例：臉部護理' },
-                { label: '時長（分鐘）', key: 'durationMin', type: 'number', placeholder: '60' },
-                { label: '定價（NT$）',  key: 'price',       type: 'number', placeholder: '1800' },
-              ] as const).map(({ label, key, type, placeholder }) => (
+                { label: '時長（分鐘）', key: 'durationMin' as const, placeholder: '60' },
+                { label: '定價（NT$）',  key: 'price'       as const, placeholder: '1800' },
+              ]).map(({ label, key, placeholder }) => (
                 <div key={key}>
                   <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">{label}</label>
-                  <input
-                    type={type}
-                    placeholder={placeholder}
-                    value={form[key]}
+                  <input type="number" placeholder={placeholder} value={form[key]}
                     onChange={e => setForm({ ...form, [key]: e.target.value })}
-                    className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors"
-                  />
+                    className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors" />
                 </div>
               ))}
             </div>
