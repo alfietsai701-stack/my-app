@@ -74,6 +74,8 @@ export default function AppointmentsPage() {
   const [form, setForm] = useState({ customerId: '', serviceId: '', date: '', time: '', note: '' })
   const [payForm, setPayForm] = useState({ total: '', payMethod: PAY_METHODS[0] })
   const [saving, setSaving] = useState(false)
+  const [newCust, setNewCust] = useState({ name: '', phone: '' })
+  const [creatingCust, setCreatingCust] = useState(false)
 
   const loadDay = useCallback(async (d: string) => {
     const res = await fetch(`/api/appointments?date=${d}`)
@@ -124,8 +126,24 @@ export default function AppointmentsPage() {
 
   function openAdd(preSlot?: string) {
     const d = view === 'day' ? date : date || today
-    setForm({ customerId: '', serviceId: services[0]?.id ?? '', date: d, time: preSlot ?? slots[0] ?? '10:00', note: '' })
-    setCustQ(''); setAdding(true)
+    setForm({ customerId: '', serviceId: services[0]?.id ?? '', date: d, time: preSlot ?? slots[0] ?? '11:00', note: '' })
+    setCustQ(''); setCreatingCust(false); setNewCust({ name: '', phone: '' }); setAdding(true)
+  }
+
+  async function handleCreateCustomer() {
+    if (!newCust.name || !newCust.phone) return
+    setSaving(true)
+    const res = await fetch('/api/customers', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newCust.name, phone: newCust.phone }),
+    })
+    if (res.ok) {
+      const c = await res.json()
+      setForm(f => ({ ...f, customerId: c.id }))
+      setCustomers(prev => [c, ...prev])
+      setCreatingCust(false)
+    }
+    setSaving(false)
   }
 
   async function handleAdd() {
@@ -451,7 +469,24 @@ export default function AppointmentsPage() {
                 {selectedCustomer ? (
                   <div className="flex items-center justify-between border-b border-[var(--t-accent)] py-2">
                     <div><p className="text-sm text-[var(--t-text)]">{selectedCustomer.name}</p><p className="text-[10px] text-[var(--t-text-4)]">{selectedCustomer.phone}</p></div>
-                    <button onClick={() => { setForm(f => ({ ...f, customerId: '' })); setCustQ('') }} className="text-[10px] text-[var(--t-text-4)] hover:text-[var(--t-text-3)]">更換</button>
+                    <button onClick={() => { setForm(f => ({ ...f, customerId: '' })); setCustQ(''); setCreatingCust(false) }} className="text-[10px] text-[var(--t-text-4)] hover:text-[var(--t-text-3)]">更換</button>
+                  </div>
+                ) : creatingCust ? (
+                  <div className="space-y-3 pt-1">
+                    <input value={newCust.name} onChange={e => setNewCust(p => ({ ...p, name: e.target.value }))} placeholder="姓名"
+                      className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors" />
+                    <input value={newCust.phone} onChange={e => setNewCust(p => ({ ...p, phone: e.target.value }))} placeholder="電話（09xxxxxxxx）"
+                      className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors" />
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={handleCreateCustomer} disabled={saving || !newCust.name || !newCust.phone}
+                        className="flex-1 border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] disabled:opacity-40 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all">
+                        {saving ? '建立中' : '建立顧客'}
+                      </button>
+                      <button onClick={() => setCreatingCust(false)}
+                        className="px-4 border border-[var(--t-border-s)] text-[var(--t-text-4)] hover:text-[var(--t-text-3)] py-1.5 text-[10px] tracking-[0.2em] uppercase transition-colors">
+                        取消
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div>
@@ -467,6 +502,21 @@ export default function AppointmentsPage() {
                           </button>
                         ))}
                       </div>
+                    )}
+                    {custQ.length > 0 && customers.length === 0 && (
+                      <div className="mt-2 flex items-center justify-between">
+                        <p className="text-[10px] text-[var(--t-text-4)]">查無顧客</p>
+                        <button onClick={() => { setCreatingCust(true); setNewCust({ name: custQ, phone: '' }) }}
+                          className="text-[10px] text-[var(--t-accent)] hover:underline tracking-wide">
+                          + 新增顧客
+                        </button>
+                      </div>
+                    )}
+                    {custQ.length === 0 && (
+                      <button onClick={() => setCreatingCust(true)}
+                        className="mt-2 text-[10px] text-[var(--t-text-4)] hover:text-[var(--t-accent)] tracking-wide transition-colors">
+                        + 新增顧客
+                      </button>
                     )}
                   </div>
                 )}
