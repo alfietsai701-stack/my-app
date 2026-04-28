@@ -30,9 +30,10 @@ export default async function DashboardPage() {
     <div className="flex flex-col flex-1 overflow-hidden">
       <header className="h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-center justify-between px-8 shrink-0">
         <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-3)] uppercase">總覽</p>
-        <button className="border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">
+        <Link href="/appointments"
+          className="border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">
           新增預約
-        </button>
+        </Link>
       </header>
 
       <main className="flex-1 bg-[var(--t-bg)] p-4 lg:p-8 overflow-auto">
