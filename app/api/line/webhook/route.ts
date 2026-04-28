@@ -122,13 +122,13 @@ async function handleSelectCategory(token: string, lineUserId: string, text: str
   }
   await saveSession(lineUserId, 'SELECT_SERVICE', { ...data, category: text })
   await replyQuickReply(token, `請選擇服務項目：`, services.map(s => ({
-    label: `${s.name}（${s.durationMin}分／NT$${s.price}）`.slice(0, 20),
-    text: s.id,
+    label: `${s.name}（${s.durationMin}分）`.slice(0, 20),
+    text: s.name,
   })))
 }
 
 async function handleSelectService(token: string, lineUserId: string, text: string, data: BookingData) {
-  const service = await prisma.service.findUnique({ where: { id: text } })
+  const service = await prisma.service.findFirst({ where: { name: text, category: data.category } })
   if (!service) {
     await replyText(token, '找不到該服務，請重新選擇。')
     return
@@ -246,6 +246,69 @@ async function handleConfirm(token: string, lineUserId: string, data: BookingDat
   ).catch(() => {})
 }
 
+// ── Menu handlers ─────────────────────────────────────────────────────────────
+
+async function handlePriceList(token: string) {
+  const services = await prisma.service.findMany({ orderBy: [{ category: 'asc' }, { price: 'asc' }] })
+  const grouped: Record<string, typeof services> = {}
+  services.forEach(s => {
+    if (!grouped[s.category]) grouped[s.category] = []
+    grouped[s.category].push(s)
+  })
+  const lines = ['💆 Ada 慢療室 服務價目表', '']
+  for (const [cat, svcs] of Object.entries(grouped)) {
+    lines.push(`【${cat}】`)
+    svcs.forEach(s => lines.push(`${s.name}\n  ${s.durationMin}分鐘｜NT$ ${s.price.toLocaleString()}`))
+    lines.push('')
+  }
+  lines.push('如需預約請點選下方「線上預約」')
+  await replyText(token, lines.join('\n'))
+}
+
+async function handleNotes(token: string) {
+  await replyText(token, [
+    '📋 預約注意事項',
+    '',
+    '1. 請提前 5 分鐘到達，以便換裝及填寫問卷',
+    '2. 療程前請避免大量進食',
+    '3. 如需取消或更改，請於 24 小時前來電告知',
+    '4. 懷孕、特殊疾病或皮膚異常者，請事先告知',
+    '5. 療程後建議多補充水分',
+    '',
+    '📞 如有任何疑問，歡迎直接來電洽詢',
+  ].join('\n'))
+}
+
+async function handlePromotion(token: string) {
+  await replyText(token, [
+    '🎁 優惠活動',
+    '',
+    '目前尚無進行中的優惠活動。',
+    '',
+    '請持續關注我們的 LINE 官方帳號，',
+    '最新消息將第一時間通知您 🌿',
+  ].join('\n'))
+}
+
+async function handleLinks(token: string) {
+  await replyText(token, [
+    '🔗 Ada 慢療室 官方連結',
+    '',
+    '📸 Instagram',
+    'https://www.instagram.com/ada_studio_2026/',
+  ].join('\n'))
+}
+
+// ── Global menu keyword map ───────────────────────────────────────────────────
+
+const MENU_KEYWORDS: Record<string, (token: string, lineUserId: string) => Promise<void>> = {
+  '__PRICE__':     (t)       => handlePriceList(t),
+  '__NOTES__':     (t)       => handleNotes(t),
+  '__PROMO__':     (t)       => handlePromotion(t),
+  '__LINKS__':     (t)       => handleLinks(t),
+  '__BOOKING__':   (t, u)    => handleStart(t, u),
+}
+
 // ── Main webhook handler ──────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
@@ -266,6 +329,13 @@ export async function POST(req: NextRequest) {
     const text        = (event.message.text as string).trim()
 
     if (!lineUserId || !replyToken) continue
+
+    // Rich menu global keywords — interrupt any step
+    if (text in MENU_KEYWORDS) {
+      if (text === '__BOOKING__') await resetSession(lineUserId)
+      await MENU_KEYWORDS[text](replyToken, lineUserId)
+      continue
+    }
 
     // Allow reset at any step
     if (['重新開始', '取消', '離開'].includes(text)) {
