@@ -5,7 +5,7 @@ import { Plus, Clock } from 'lucide-react'
 
 type Service = { id: string; name: string; price: number; durationMin: number; category: string }
 const CATEGORIES = ['身體按摩', '臉部護理', '特別療癒套組'] as const
-const EMPTY = { name: '', price: '', durationMin: '', category: CATEGORIES[0] }
+const EMPTY = { name: '', price: '', durationMin: '', category: CATEGORIES[0] as string }
 
 export default function ServicesPage() {
   const [services, setServices] = useState<Service[]>([])
