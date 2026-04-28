@@ -139,7 +139,8 @@ async function handleSelectDate(token: string, lineUserId: string, text: string,
 }
 
 async function handleSelectTime(token: string, lineUserId: string, text: string, data: BookingData) {
-  if (!BUSINESS_HOURS.includes(text)) {
+  const businessSlots = await getAvailableSlotsFromDB(data.date ?? '', data.serviceDuration ?? 60)
+  if (!businessSlots.includes(text)) {
     await replyText(token, '請從選項中選擇時間。')
     return
   }
