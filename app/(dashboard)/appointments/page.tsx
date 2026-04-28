@@ -24,6 +24,23 @@ const STATUS_DOT: Record<string, string> = {
 const PAY_METHODS = ['現金', '信用卡', 'Line Pay', '轉帳']
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
+const BUFFER_MIN = 60
+
+function calcBlockedSlots(appts: Appt[], allSlots: string[]): Set<string> {
+  const blocked = new Set<string>()
+  appts.filter(a => a.status !== 'cancelled').forEach(a => {
+    const d = new Date(a.scheduledAt)
+    const apptStart = d.getHours() * 60 + d.getMinutes()
+    const apptEnd   = apptStart + a.service.durationMin + BUFFER_MIN
+    allSlots.forEach(slot => {
+      const [sh, sm] = slot.split(':').map(Number)
+      const slotMin  = sh * 60 + sm
+      if (slotMin > apptStart && slotMin < apptEnd) blocked.add(slot)
+    })
+  })
+  return blocked
+}
+
 const toDateStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
 const toMonthStr = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 const fmtTime = (iso: string) => new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
@@ -154,7 +171,6 @@ export default function AppointmentsPage() {
   const selectedCustomer = customers.find(c => c.id === form.customerId)
   const sidebarAppts = apptsByDate[date] ?? []
 
-  // Slot grid: match appointments to slots by start time
   function slotAppts(slot: string, appts: Appt[]) {
     const [h, m] = slot.split(':').map(Number)
     return appts.filter(a => {
@@ -162,6 +178,9 @@ export default function AppointmentsPage() {
       return d.getHours() === h && d.getMinutes() === m
     })
   }
+
+  const dayBlocked      = calcBlockedSlots(dayAppts, slots)
+  const sidebarBlocked  = calcBlockedSlots(sidebarAppts, slots)
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
@@ -254,14 +273,13 @@ export default function AppointmentsPage() {
                 <div className="flex items-center justify-center h-32 text-[10px] text-[var(--t-text-4)] tracking-widest">載入中</div>
               ) : (
                 slots.map(slot => {
-                  const appts = slotAppts(slot, dayAppts)
+                  const appts   = slotAppts(slot, dayAppts)
+                  const blocked = dayBlocked.has(slot)
                   return (
-                    <div key={slot} className="flex border-b border-[var(--t-border)] group min-h-[72px]">
-                      {/* Time label */}
-                      <div className="w-14 shrink-0 py-4 px-3 border-r border-[var(--t-border)] flex items-start">
+                    <div key={slot} className={`flex border-b border-[var(--t-border)] group min-h-[72px] ${blocked ? 'bg-[var(--t-bg)]' : ''}`}>
+                      <div className={`w-14 shrink-0 py-4 px-3 border-r border-[var(--t-border)] flex items-start ${blocked ? 'opacity-40' : ''}`}>
                         <span className="text-[10px] text-[var(--t-text-4)] tabular-nums tracking-wide">{slot}</span>
                       </div>
-                      {/* Slot content */}
                       <div className="flex-1 p-2 relative">
                         {appts.length > 0 ? (
                           <div className="space-y-1.5">
@@ -285,6 +303,10 @@ export default function AppointmentsPage() {
                                 </div>
                               </div>
                             ))}
+                          </div>
+                        ) : blocked ? (
+                          <div className="flex items-center h-full px-2">
+                            <span className="text-[10px] text-[var(--t-text-4)] tracking-widest opacity-60">緩衝時段</span>
                           </div>
                         ) : (
                           <button onClick={() => openAdd(slot)}
@@ -317,10 +339,11 @@ export default function AppointmentsPage() {
                 <div className="flex items-center justify-center h-32 text-[10px] text-[var(--t-text-4)]">載入中</div>
               ) : (
                 slots.map(slot => {
-                  const appts = slotAppts(slot, sidebarAppts)
+                  const appts   = slotAppts(slot, sidebarAppts)
+                  const blocked = sidebarBlocked.has(slot)
                   return (
-                    <div key={slot} className="flex border-b border-[var(--t-border)] group min-h-[56px]">
-                      <div className="w-12 shrink-0 py-3 px-2 border-r border-[var(--t-border)] flex items-start">
+                    <div key={slot} className={`flex border-b border-[var(--t-border)] group min-h-[56px] ${blocked ? 'bg-[var(--t-bg)]' : ''}`}>
+                      <div className={`w-12 shrink-0 py-3 px-2 border-r border-[var(--t-border)] flex items-start ${blocked ? 'opacity-40' : ''}`}>
                         <span className="text-[9px] text-[var(--t-text-4)] tabular-nums">{slot}</span>
                       </div>
                       <div className="flex-1 p-1.5 relative">
@@ -338,6 +361,10 @@ export default function AppointmentsPage() {
                                 <p className="text-[10px] text-[var(--t-text-4)] ml-3">{a.service.name}</p>
                               </div>
                             ))}
+                          </div>
+                        ) : blocked ? (
+                          <div className="flex items-center h-full px-1">
+                            <span className="text-[9px] text-[var(--t-text-4)] opacity-50 tracking-wider">緩衝</span>
                           </div>
                         ) : (
                           <button onClick={() => openAdd(slot)}

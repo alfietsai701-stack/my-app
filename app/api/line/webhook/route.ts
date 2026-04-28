@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { replyText, replyImage, replyQuickReply, sendLineMessage } from '@/lib/line'
-import { getBusinessSlots } from '@/lib/slots'
+import { getAvailableSlots as getAvailableSlotsFromDB } from '@/lib/slots'
 
 const BASE_URL = process.env.NEXTAUTH_URL?.replace('http://localhost:3000', 'https://my-app-taupe-three-92.vercel.app') ?? 'https://my-app-taupe-three-92.vercel.app'
 
@@ -33,7 +33,6 @@ function verifySignature(body: string, signature: string): boolean {
 
 // ── Date/time helpers ─────────────────────────────────────────────────────────
 
-// Slots loaded from DB at runtime via getBusinessSlots()
 
 function getUpcomingDates(count = 7): { label: string; value: string }[] {
   const dates = []
@@ -51,36 +50,7 @@ function getUpcomingDates(count = 7): { label: string; value: string }[] {
 }
 
 async function getAvailableSlots(date: string, durationMin: number): Promise<string[]> {
-  const [y, m, day] = date.split('-').map(Number)
-  const start = new Date(y, m-1, day, 0, 0, 0)
-  const end   = new Date(y, m-1, day, 23, 59, 59)
-
-  const [businessSlots, appts] = await Promise.all([
-    getBusinessSlots(),
-    prisma.appointment.findMany({
-      where: { scheduledAt: { gte: start, lte: end }, status: { not: 'cancelled' } },
-      include: { service: { select: { durationMin: true } } },
-    }),
-  ])
-
-  const blocked = new Set<number>()
-  appts.forEach(a => {
-    const h = a.scheduledAt.getHours()
-    const min = a.scheduledAt.getMinutes()
-    const startMin = h * 60 + min
-    const endMin   = startMin + a.service.durationMin
-    for (let t = startMin; t < endMin; t += 30) blocked.add(t)
-  })
-
-  return businessSlots.filter(slot => {
-    const [sh, sm] = slot.split(':').map(Number)
-    const slotStart = sh * 60 + sm
-    const slotEnd   = slotStart + durationMin
-    for (let t = slotStart; t < slotEnd; t += 30) {
-      if (blocked.has(t)) return false
-    }
-    return true
-  })
+  return getAvailableSlotsFromDB(date, durationMin)
 }
 
 // ── Session helpers ───────────────────────────────────────────────────────────
