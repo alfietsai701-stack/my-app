@@ -95,7 +95,7 @@ export default function ReportsPage() {
                       <CartesianGrid vertical={false} stroke="var(--t-border)" />
                       <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--t-text-3)' }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: 'var(--t-text-3)' }} axisLine={false} tickLine={false} tickFormatter={v => `${(v/1000).toFixed(0)}k`} width={36} />
-                      <Tooltip {...tooltipStyle} formatter={(v: number) => [`NT$ ${v.toLocaleString()}`, '收入']} />
+                      <Tooltip {...tooltipStyle} formatter={(v) => [`NT$ ${Number(v).toLocaleString()}`, '收入']} />
                       <Bar dataKey="revenue" fill="var(--t-accent)" radius={0} />
                     </BarChart>
                   ) : (
@@ -103,7 +103,7 @@ export default function ReportsPage() {
                       <CartesianGrid vertical={false} stroke="var(--t-border)" />
                       <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--t-text-3)' }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 10, fill: 'var(--t-text-3)' }} axisLine={false} tickLine={false} width={28} />
-                      <Tooltip {...tooltipStyle} formatter={(v: number) => [`${v} 筆`, '預約']} />
+                      <Tooltip {...tooltipStyle} formatter={(v) => [`${v} 筆`, '預約']} />
                       <Line dataKey="appointments" stroke="var(--t-accent)" strokeWidth={1.5} dot={{ fill: 'var(--t-accent)', r: 3 }} />
                     </LineChart>
                   )}
