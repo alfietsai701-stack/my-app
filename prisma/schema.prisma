@@ -52,11 +52,13 @@ model Receipt {
 }
 
 model InventoryItem {
-  id         String @id @default(cuid())
+  id         String  @id @default(cuid())
   name       String
+  category   String  @default("其他")
   quantity   Int
   alertLevel Int
   unit       String
+  note       String?
 }
 
 model Member {
@@ -66,6 +68,25 @@ model Member {
   points     Int      @default(0)
   joinedAt   DateTime @default(now())
   customer   Customer @relation(fields: [customerId], references: [id])
+}
+
+model StockCheckSession {
+  id          String            @id @default(cuid())
+  createdAt   DateTime          @default(now())
+  completedAt DateTime?
+  note        String?
+  entries     StockCheckEntry[]
+}
+
+model StockCheckEntry {
+  id        String             @id @default(cuid())
+  sessionId String
+  itemId    String
+  itemName  String
+  unit      String
+  expected  Int
+  actual    Int
+  session   StockCheckSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model AdminUser {
