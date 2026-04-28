@@ -90,6 +90,13 @@ model StockCheckEntry {
   session   StockCheckSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
+model LineSession {
+  lineUserId String   @id
+  step       String   @default("START")
+  data       Json     @default("{}")
+  updatedAt  DateTime @updatedAt
+}
+
 model AdminUser {
   id           String   @id @default(cuid())
   email        String   @unique

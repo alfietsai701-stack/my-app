@@ -30,6 +30,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         payMethod: body.payMethod,
       },
     })
+    const updated = await prisma.appointment.findUnique({
+      where: { id },
+      include: {
+        customer: { select: { id: true, name: true, phone: true } },
+        service:  { select: { id: true, name: true, durationMin: true, price: true } },
+        receipt:  true,
+      },
+    })
+    return NextResponse.json(updated)
   }
 
   return NextResponse.json(appointment)
