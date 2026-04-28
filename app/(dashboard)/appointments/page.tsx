@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Plus, Clock, User } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, User } from 'lucide-react'
 
 type Customer = { id: string; name: string; phone: string }
 type Service  = { id: string; name: string; durationMin: number; price: number }
@@ -48,6 +48,7 @@ export default function AppointmentsPage() {
   const [dayAppts, setDayAppts]     = useState<Appt[]>([])
   const [monthAppts, setMonthAppts] = useState<Appt[]>([])
   const [selected, setSelected]     = useState<Appt | null>(null)
+  const [slots, setSlots]           = useState<string[]>([])
   const [adding, setAdding]   = useState(false)
   const [paying, setPaying]   = useState(false)
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -68,8 +69,9 @@ export default function AppointmentsPage() {
   }, [])
 
   useEffect(() => { loadMonth(month) }, [month, loadMonth])
-  useEffect(() => { if (view === 'day') loadDay(date) }, [date, view, loadDay])
+  useEffect(() => { loadDay(date) }, [date, loadDay])
   useEffect(() => { fetch('/api/services').then(r => r.ok ? r.json() : []).then(setServices) }, [])
+  useEffect(() => { fetch('/api/settings/slots').then(r => r.ok ? r.json() : { slots: [] }).then(d => setSlots(d.slots)) }, [])
   useEffect(() => {
     const t = setTimeout(async () => {
       const res = await fetch(`/api/customers?q=${encodeURIComponent(custQ)}`)
@@ -78,7 +80,6 @@ export default function AppointmentsPage() {
     return () => clearTimeout(t)
   }, [custQ])
 
-  // Calendar data
   const [calYear, calMonth] = month.split('-').map(Number)
   const calDays = buildCalendar(calYear, calMonth - 1)
   const apptsByDate: Record<string, Appt[]> = {}
@@ -88,8 +89,7 @@ export default function AppointmentsPage() {
   })
 
   function selectDay(d: Date) {
-    const s = toDateStr(d)
-    setDate(s)
+    setDate(toDateStr(d))
     setSelected(null)
   }
 
@@ -100,14 +100,14 @@ export default function AppointmentsPage() {
   }
 
   function shiftDay(dir: 1 | -1) {
-    const d = new Date(date)
+    const d = new Date(date + 'T00:00:00')
     d.setDate(d.getDate() + dir)
     setDate(toDateStr(d))
   }
 
-  function openAdd() {
-    const d = view === 'day' ? date : today
-    setForm({ customerId: '', serviceId: services[0]?.id ?? '', date: d, time: '10:00', note: '' })
+  function openAdd(preSlot?: string) {
+    const d = view === 'day' ? date : date || today
+    setForm({ customerId: '', serviceId: services[0]?.id ?? '', date: d, time: preSlot ?? slots[0] ?? '10:00', note: '' })
     setCustQ(''); setAdding(true)
   }
 
@@ -120,7 +120,7 @@ export default function AppointmentsPage() {
       body: JSON.stringify({ customerId: form.customerId, serviceId: form.serviceId, scheduledAt, note: form.note }),
     })
     setSaving(false); setAdding(false)
-    loadMonth(month); if (view === 'day') loadDay(date)
+    loadMonth(month); loadDay(date)
   }
 
   async function handleStatus(id: string, status: string) {
@@ -129,7 +129,7 @@ export default function AppointmentsPage() {
       body: JSON.stringify({ status }),
     })
     setSelected(prev => prev?.id === id ? { ...prev, status } : prev)
-    loadMonth(month); if (view === 'day') loadDay(date)
+    loadMonth(month); loadDay(date)
   }
 
   async function handlePay() {
@@ -140,7 +140,7 @@ export default function AppointmentsPage() {
       body: JSON.stringify({ status: 'completed', total: Number(payForm.total), payMethod: payForm.payMethod }),
     })
     setSaving(false); setPaying(false)
-    loadMonth(month); if (view === 'day') loadDay(date)
+    loadMonth(month); loadDay(date)
     const updated = await fetch(`/api/appointments?date=${date}`).then(r => r.json())
     setSelected(updated.find((a: Appt) => a.id === selected.id) ?? null)
   }
@@ -148,32 +148,39 @@ export default function AppointmentsPage() {
   async function handleDelete(id: string) {
     if (!confirm('確定要刪除這筆預約？')) return
     await fetch(`/api/appointments/${id}`, { method: 'DELETE' })
-    setSelected(null); loadMonth(month); if (view === 'day') loadDay(date)
+    setSelected(null); loadMonth(month); loadDay(date)
   }
 
   const selectedCustomer = customers.find(c => c.id === form.customerId)
-  const activeAppts = view === 'day' ? dayAppts : (apptsByDate[date] ?? [])
+  const sidebarAppts = apptsByDate[date] ?? []
+
+  // Slot grid: match appointments to slots by start time
+  function slotAppts(slot: string, appts: Appt[]) {
+    const [h, m] = slot.split(':').map(Number)
+    return appts.filter(a => {
+      const d = new Date(a.scheduledAt)
+      return d.getHours() === h && d.getMinutes() === m
+    })
+  }
 
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       {/* Header */}
       <header className="h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-center justify-between px-4 lg:px-8 shrink-0 gap-3">
         <div className="flex items-center gap-3 min-w-0">
-          {/* View toggle */}
           <div className="flex border border-[var(--t-border)] shrink-0">
             {(['month', 'day'] as const).map((v, i) => (
-              <button key={v} onClick={() => { setView(v); if (v === 'day') loadDay(date) }}
+              <button key={v} onClick={() => setView(v)}
                 className={`px-3 py-1 text-[10px] tracking-[0.2em] uppercase transition-colors ${i === 0 ? '' : 'border-l border-[var(--t-border)]'} ${
                   view === v ? 'bg-[var(--t-accent)] text-[var(--t-accent-fg)]' : 'text-[var(--t-text-3)] hover:text-[var(--t-text-2)]'
                 }`}>{v === 'month' ? '月' : '日'}</button>
             ))}
           </div>
 
-          {/* Navigation */}
           <button onClick={() => view === 'month' ? shiftMonth(-1) : shiftDay(-1)}
             className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] transition-colors shrink-0"><ChevronLeft size={15} strokeWidth={1.5} /></button>
 
-          <button onClick={() => { const n = new Date(); setDate(toDateStr(n)); setMonth(toMonthStr(n)); if (view === 'day') loadDay(toDateStr(n)) }}
+          <button onClick={() => { const n = new Date(); setDate(toDateStr(n)); setMonth(toMonthStr(n)) }}
             className="text-[10px] tracking-[0.2em] text-[var(--t-text-3)] hover:text-[var(--t-accent)] uppercase transition-colors truncate">
             {view === 'month'
               ? `${calYear} 年 ${calMonth} 月`
@@ -185,26 +192,23 @@ export default function AppointmentsPage() {
             className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] transition-colors shrink-0"><ChevronRight size={15} strokeWidth={1.5} /></button>
         </div>
 
-        <button onClick={openAdd}
+        <button onClick={() => openAdd()}
           className="flex items-center gap-2 border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] px-4 lg:px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200 shrink-0">
           <Plus size={11} /><span className="hidden sm:inline">新增預約</span><span className="sm:hidden">新增</span>
         </button>
       </header>
 
-      {/* Main area */}
       <div className="flex flex-1 overflow-hidden">
 
-        {/* Month calendar */}
+        {/* ── Month calendar ── */}
         {view === 'month' && (
           <div className={`flex flex-col overflow-hidden ${selected ? 'hidden lg:flex lg:flex-1' : 'flex-1'}`}>
             <div className="flex-1 overflow-auto bg-[var(--t-bg)] p-4 lg:p-6">
-              {/* Weekday headers */}
               <div className="grid grid-cols-7 mb-1">
                 {WEEKDAYS.map((w, i) => (
                   <div key={w} className={`text-center py-2 text-[10px] tracking-[0.2em] ${i === 0 ? 'text-[#A06060]' : i === 6 ? 'text-[var(--t-accent)]' : 'text-[var(--t-text-4)]'}`}>{w}</div>
                 ))}
               </div>
-              {/* Day cells */}
               <div className="grid grid-cols-7 gap-px bg-[var(--t-border)]">
                 {calDays.map((d, i) => {
                   const ds = toDateStr(d)
@@ -219,13 +223,11 @@ export default function AppointmentsPage() {
                         isSelected ? 'ring-1 ring-inset ring-[var(--t-accent)]' : ''
                       } ${!isThisMonth ? 'opacity-30' : ''}`}>
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className={`text-xs w-6 h-6 flex items-center justify-center leading-none transition-colors ${
-                          isToday ? 'bg-[var(--t-accent)] text-[var(--t-accent-fg)] rounded-full font-normal' :
+                        <span className={`text-xs w-6 h-6 flex items-center justify-center leading-none ${
+                          isToday ? 'bg-[var(--t-accent)] text-[var(--t-accent-fg)] rounded-full' :
                           d.getDay() === 0 ? 'text-[#A06060]' : d.getDay() === 6 ? 'text-[var(--t-accent)]' : 'text-[var(--t-text-3)]'
                         }`}>{d.getDate()}</span>
-                        {activeCount > 0 && (
-                          <span className="text-[9px] text-[var(--t-text-4)] tabular-nums">{activeCount}</span>
-                        )}
+                        {activeCount > 0 && <span className="text-[9px] text-[var(--t-text-4)]">{activeCount}</span>}
                       </div>
                       <div className="space-y-0.5">
                         {cellAppts.slice(0, 3).map(a => (
@@ -234,9 +236,7 @@ export default function AppointmentsPage() {
                             <span className="text-[10px] text-[var(--t-text-3)] truncate leading-tight">{fmtTime(a.scheduledAt)} {a.customer.name}</span>
                           </div>
                         ))}
-                        {cellAppts.length > 3 && (
-                          <p className="text-[9px] text-[var(--t-text-4)] pl-2.5">+{cellAppts.length - 3}</p>
-                        )}
+                        {cellAppts.length > 3 && <p className="text-[9px] text-[var(--t-text-4)] pl-2.5">+{cellAppts.length - 3}</p>}
                       </div>
                     </div>
                   )
@@ -246,50 +246,65 @@ export default function AppointmentsPage() {
           </div>
         )}
 
-        {/* Day list */}
+        {/* ── Day view: slot timetable ── */}
         {view === 'day' && (
-          <div className={`flex flex-col overflow-hidden bg-[var(--t-bg)] ${selected ? 'hidden lg:flex lg:w-[55%] border-r border-[var(--t-border)]' : 'flex-1'}`}>
+          <div className={`flex flex-col overflow-hidden bg-[var(--t-bg)] ${selected ? 'hidden lg:flex lg:flex-1' : 'flex-1'}`}>
             <div className="flex-1 overflow-auto">
-              {activeAppts.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-64 text-center">
-                  <p className="text-xs text-[var(--t-text-3)] tracking-widest mb-2">今日無預約</p>
-                  <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">點擊「新增預約」建立第一筆</p>
-                </div>
+              {slots.length === 0 ? (
+                <div className="flex items-center justify-center h-32 text-[10px] text-[var(--t-text-4)] tracking-widest">載入中</div>
               ) : (
-                <div className="p-4 lg:p-6 space-y-3">
-                  {activeAppts.map(a => (
-                    <div key={a.id} onClick={() => setSelected(a)}
-                      className={`bg-[var(--t-surface)] border cursor-pointer transition-colors p-5 ${
-                        selected?.id === a.id ? 'border-[var(--t-accent)]' : 'border-[var(--t-border)] hover:border-[var(--t-border-s)]'
-                      } ${a.status === 'cancelled' ? 'opacity-50' : ''}`}>
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <Clock size={11} strokeWidth={1.5} className="text-[var(--t-text-4)]" />
-                          <span className="text-xs text-[var(--t-text-3)] tabular-nums">{fmtTime(a.scheduledAt)}</span>
-                          <span className="text-[10px] text-[var(--t-text-4)]">— {a.service.durationMin} 分</span>
-                        </div>
-                        <span className={`px-2.5 py-0.5 text-[10px] tracking-wide ${STATUS[a.status as keyof typeof STATUS]?.style}`}>
-                          {STATUS[a.status as keyof typeof STATUS]?.label}
-                        </span>
+                slots.map(slot => {
+                  const appts = slotAppts(slot, dayAppts)
+                  return (
+                    <div key={slot} className="flex border-b border-[var(--t-border)] group min-h-[72px]">
+                      {/* Time label */}
+                      <div className="w-14 shrink-0 py-4 px-3 border-r border-[var(--t-border)] flex items-start">
+                        <span className="text-[10px] text-[var(--t-text-4)] tabular-nums tracking-wide">{slot}</span>
                       </div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <User size={11} strokeWidth={1.5} className="text-[var(--t-text-4)]" />
-                        <span className="text-sm font-light text-[var(--t-text)] tracking-wide">{a.customer.name}</span>
+                      {/* Slot content */}
+                      <div className="flex-1 p-2 relative">
+                        {appts.length > 0 ? (
+                          <div className="space-y-1.5">
+                            {appts.map(a => (
+                              <div key={a.id} onClick={() => setSelected(a)}
+                                className={`cursor-pointer border px-4 py-3 transition-colors ${
+                                  selected?.id === a.id ? 'border-[var(--t-accent)] bg-[var(--t-surface)]' : 'border-[var(--t-border)] bg-[var(--t-surface)] hover:border-[var(--t-border-s)]'
+                                } ${a.status === 'cancelled' ? 'opacity-40' : ''}`}>
+                                <div className="flex items-center justify-between mb-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[a.status]}`} />
+                                    <span className="text-xs font-light text-[var(--t-text)] tracking-wide">{a.customer.name}</span>
+                                  </div>
+                                  <span className={`px-2 py-0.5 text-[10px] tracking-wide ${STATUS[a.status as keyof typeof STATUS]?.style}`}>
+                                    {STATUS[a.status as keyof typeof STATUS]?.label}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-3 ml-3.5">
+                                  <span className="text-[10px] text-[var(--t-text-3)]">{a.service.name}</span>
+                                  <span className="text-[10px] text-[var(--t-text-4)]">{a.service.durationMin} 分鐘</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <button onClick={() => openAdd(slot)}
+                            className="absolute inset-1 border border-dashed border-transparent group-hover:border-[var(--t-border)] text-[var(--t-text-4)] text-[10px] tracking-widest opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-1 hover:border-[var(--t-border-s)]">
+                            <Plus size={10} strokeWidth={1.5} /> 新增
+                          </button>
+                        )}
                       </div>
-                      <p className="text-xs text-[var(--t-text-3)] tracking-wide ml-[19px]">{a.service.name}</p>
-                      {a.note && <p className="text-[10px] text-[var(--t-text-4)] ml-[19px] mt-1.5">{a.note}</p>}
                     </div>
-                  ))}
-                </div>
+                  )
+                })
               )}
             </div>
             <div className="px-6 py-3 border-t border-[var(--t-border)] bg-[var(--t-surface)] shrink-0">
-              <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">{activeAppts.filter(a => a.status !== 'cancelled').length} 筆預約</p>
+              <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">{dayAppts.filter(a => a.status !== 'cancelled').length} 筆預約</p>
             </div>
           </div>
         )}
 
-        {/* Month view: right panel shows selected day list */}
+        {/* ── Month sidebar: slot timetable for selected day ── */}
         {view === 'month' && (
           <div className={`flex flex-col overflow-hidden bg-[var(--t-bg)] border-l border-[var(--t-border)] ${selected ? 'flex-1' : 'hidden lg:flex lg:w-72'}`}>
             <div className="px-5 py-3.5 border-b border-[var(--t-border)] bg-[var(--t-surface)] shrink-0">
@@ -298,32 +313,48 @@ export default function AppointmentsPage() {
               </p>
             </div>
             <div className="flex-1 overflow-auto">
-              {(apptsByDate[date] ?? []).length === 0 ? (
-                <div className="flex items-center justify-center h-32">
-                  <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">無預約</p>
-                </div>
+              {slots.length === 0 ? (
+                <div className="flex items-center justify-center h-32 text-[10px] text-[var(--t-text-4)]">載入中</div>
               ) : (
-                <div className="p-4 space-y-2">
-                  {(apptsByDate[date] ?? []).map(a => (
-                    <div key={a.id} onClick={() => setSelected(a)}
-                      className={`border cursor-pointer transition-colors p-4 ${
-                        selected?.id === a.id ? 'border-[var(--t-accent)] bg-[var(--t-surface)]' : 'border-[var(--t-border)] bg-[var(--t-surface)] hover:border-[var(--t-border-s)]'
-                      } ${a.status === 'cancelled' ? 'opacity-40' : ''}`}>
-                      <div className="flex items-center gap-1.5 mb-1.5">
-                        <span className={`w-1.5 h-1.5 rounded-full ${STATUS_DOT[a.status]}`} />
-                        <span className="text-[10px] text-[var(--t-text-3)] tabular-nums">{fmtTime(a.scheduledAt)}</span>
+                slots.map(slot => {
+                  const appts = slotAppts(slot, sidebarAppts)
+                  return (
+                    <div key={slot} className="flex border-b border-[var(--t-border)] group min-h-[56px]">
+                      <div className="w-12 shrink-0 py-3 px-2 border-r border-[var(--t-border)] flex items-start">
+                        <span className="text-[9px] text-[var(--t-text-4)] tabular-nums">{slot}</span>
                       </div>
-                      <p className="text-xs font-light text-[var(--t-text)]">{a.customer.name}</p>
-                      <p className="text-[10px] text-[var(--t-text-4)] mt-0.5">{a.service.name}</p>
+                      <div className="flex-1 p-1.5 relative">
+                        {appts.length > 0 ? (
+                          <div className="space-y-1">
+                            {appts.map(a => (
+                              <div key={a.id} onClick={() => setSelected(a)}
+                                className={`cursor-pointer border px-3 py-2 transition-colors ${
+                                  selected?.id === a.id ? 'border-[var(--t-accent)] bg-[var(--t-surface)]' : 'border-[var(--t-border)] bg-[var(--t-surface)] hover:border-[var(--t-border-s)]'
+                                } ${a.status === 'cancelled' ? 'opacity-40' : ''}`}>
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${STATUS_DOT[a.status]}`} />
+                                  <span className="text-[11px] text-[var(--t-text)] truncate">{a.customer.name}</span>
+                                </div>
+                                <p className="text-[10px] text-[var(--t-text-4)] ml-3">{a.service.name}</p>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <button onClick={() => openAdd(slot)}
+                            className="absolute inset-0.5 border border-dashed border-transparent group-hover:border-[var(--t-border)] opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
+                            <Plus size={9} strokeWidth={1.5} className="text-[var(--t-text-4)]" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  )
+                })
               )}
             </div>
           </div>
         )}
 
-        {/* Detail panel */}
+        {/* ── Detail panel ── */}
         {selected && (
           <div className="flex-1 lg:max-w-xs flex flex-col overflow-hidden bg-[var(--t-bg)] border-l border-[var(--t-border)]">
             <div className="px-4 lg:px-6 py-4 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-start justify-between shrink-0">
@@ -378,7 +409,7 @@ export default function AppointmentsPage() {
         )}
       </div>
 
-      {/* Add modal */}
+      {/* ── Add modal ── */}
       {adding && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[var(--t-surface)] border border-[var(--t-border)] w-full max-w-sm p-8 max-h-[90vh] overflow-y-auto">
@@ -387,6 +418,7 @@ export default function AppointmentsPage() {
               <button onClick={() => setAdding(false)} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none">×</button>
             </div>
             <div className="space-y-5">
+              {/* Customer */}
               <div>
                 <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">顧客</label>
                 {selectedCustomer ? (
@@ -412,6 +444,7 @@ export default function AppointmentsPage() {
                   </div>
                 )}
               </div>
+              {/* Service */}
               <div>
                 <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">服務項目</label>
                 <select value={form.serviceId} onChange={e => setForm(f => ({ ...f, serviceId: e.target.value }))}
@@ -419,18 +452,27 @@ export default function AppointmentsPage() {
                   {services.map(s => <option key={s.id} value={s.id}>{s.name}（{s.durationMin}分　NT${s.price.toLocaleString()}）</option>)}
                 </select>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">日期</label>
-                  <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                    className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] transition-colors" />
-                </div>
-                <div>
-                  <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">時間</label>
-                  <input type="time" value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
-                    className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] transition-colors" />
+              {/* Date */}
+              <div>
+                <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">日期</label>
+                <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                  className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] transition-colors" />
+              </div>
+              {/* Time slots */}
+              <div>
+                <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-3 block">時段</label>
+                <div className="flex flex-wrap gap-2">
+                  {slots.map(s => (
+                    <button key={s} onClick={() => setForm(f => ({ ...f, time: s }))}
+                      className={`px-3 py-1.5 text-[11px] border transition-colors ${
+                        form.time === s
+                          ? 'border-[var(--t-accent)] text-[var(--t-accent)] bg-[var(--t-accent-bg)]'
+                          : 'border-[var(--t-border-s)] text-[var(--t-text-3)] hover:border-[var(--t-border-s)] hover:text-[var(--t-text-2)]'
+                      }`}>{s}</button>
+                  ))}
                 </div>
               </div>
+              {/* Note */}
               <div>
                 <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">備註</label>
                 <input value={form.note} onChange={e => setForm(f => ({ ...f, note: e.target.value }))} placeholder="選填"
@@ -445,7 +487,7 @@ export default function AppointmentsPage() {
         </div>
       )}
 
-      {/* Payment modal */}
+      {/* ── Payment modal ── */}
       {paying && selected && (
         <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[var(--t-surface)] border border-[var(--t-border)] w-full max-w-xs p-8">

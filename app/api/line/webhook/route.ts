@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { replyText, replyImage, replyQuickReply, sendLineMessage } from '@/lib/line'
+import { getBusinessSlots } from '@/lib/slots'
 
 const BASE_URL = process.env.NEXTAUTH_URL?.replace('http://localhost:3000', 'https://my-app-taupe-three-92.vercel.app') ?? 'https://my-app-taupe-three-92.vercel.app'
 
@@ -32,7 +33,7 @@ function verifySignature(body: string, signature: string): boolean {
 
 // ── Date/time helpers ─────────────────────────────────────────────────────────
 
-const BUSINESS_HOURS = ['10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00']
+// Slots loaded from DB at runtime via getBusinessSlots()
 
 function getUpcomingDates(count = 7): { label: string; value: string }[] {
   const dates = []
@@ -54,21 +55,24 @@ async function getAvailableSlots(date: string, durationMin: number): Promise<str
   const start = new Date(y, m-1, day, 0, 0, 0)
   const end   = new Date(y, m-1, day, 23, 59, 59)
 
-  const appts = await prisma.appointment.findMany({
-    where: { scheduledAt: { gte: start, lte: end }, status: { not: 'cancelled' } },
-    include: { service: { select: { durationMin: true } } },
-  })
+  const [businessSlots, appts] = await Promise.all([
+    getBusinessSlots(),
+    prisma.appointment.findMany({
+      where: { scheduledAt: { gte: start, lte: end }, status: { not: 'cancelled' } },
+      include: { service: { select: { durationMin: true } } },
+    }),
+  ])
 
   const blocked = new Set<number>()
   appts.forEach(a => {
     const h = a.scheduledAt.getHours()
-    const m = a.scheduledAt.getMinutes()
-    const startMin = h * 60 + m
+    const min = a.scheduledAt.getMinutes()
+    const startMin = h * 60 + min
     const endMin   = startMin + a.service.durationMin
     for (let t = startMin; t < endMin; t += 30) blocked.add(t)
   })
 
-  return BUSINESS_HOURS.filter(slot => {
+  return businessSlots.filter(slot => {
     const [sh, sm] = slot.split(':').map(Number)
     const slotStart = sh * 60 + sm
     const slotEnd   = slotStart + durationMin
