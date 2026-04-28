@@ -54,7 +54,7 @@ export default function ReportsPage() {
         <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-3)] uppercase">報表</p>
       </header>
 
-      <main className="flex-1 bg-[var(--t-bg)] p-8 overflow-auto">
+      <main className="flex-1 bg-[var(--t-bg)] p-4 lg:p-8 overflow-auto">
         {!data ? (
           <div className="flex items-center justify-center h-64 text-[10px] text-[var(--t-text-4)] tracking-widest">載入中</div>
         ) : isEmpty ? (
@@ -62,7 +62,7 @@ export default function ReportsPage() {
         ) : (
           <>
             {/* KPI cards */}
-            <div className="grid grid-cols-2 gap-5 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:gap-5 mb-6 lg:mb-8">
               <KpiCard
                 label="本月收入"
                 value={`NT$ ${data.revenueThisMonth.toLocaleString()}`}
@@ -111,7 +111,7 @@ export default function ReportsPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5">
               {/* Top services */}
               {data.topServices.length > 0 && (
                 <div className="bg-[var(--t-surface)] border border-[var(--t-border)]">

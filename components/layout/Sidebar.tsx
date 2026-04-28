@@ -18,7 +18,7 @@ const NAV_ITEMS = [
   { icon: Settings, label: '系統設定', href: '/settings',    key: 'settings'     },
 ] as const
 
-export default function Sidebar({ permissions, userName }: { permissions: Permissions | null; userName: string }) {
+export default function Sidebar({ permissions, userName, onNavigate }: { permissions: Permissions | null; userName: string; onNavigate?: () => void }) {
   const pathname = usePathname()
   const router = useRouter()
   const { theme, toggle } = useTheme()
@@ -50,7 +50,7 @@ export default function Sidebar({ permissions, userName }: { permissions: Permis
 
   return (
     <>
-      <aside className="w-52 h-screen flex flex-col shrink-0 bg-[var(--t-sidebar)] border-r border-[var(--t-border)]">
+      <aside className="w-52 h-screen flex flex-col shrink-0 bg-[var(--t-sidebar)] border-r border-[var(--t-border)] overflow-y-auto">
         {/* Brand */}
         <div className="px-7 py-8">
           <p className="text-[9px] tracking-[0.35em] text-[var(--t-accent)] uppercase mb-1.5">Ada Studio</p>
@@ -64,7 +64,7 @@ export default function Sidebar({ permissions, userName }: { permissions: Permis
           {visibleItems.map(({ icon: Icon, label, href }) => {
             const isActive = pathname === href
             return (
-              <Link key={href} href={href}
+              <Link key={href} href={href} onClick={onNavigate}
                 className={`flex items-center gap-3 px-3 py-2.5 text-xs tracking-wide transition-colors relative ${
                   isActive
                     ? 'text-[var(--t-accent)]'

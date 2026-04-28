@@ -91,7 +91,7 @@ export default function CustomersPage() {
 
       <div className="flex flex-1 overflow-hidden">
         {/* List */}
-        <div className={`flex flex-col ${detail ? 'w-[55%]' : 'flex-1'} border-r border-[var(--t-border)] transition-all`}>
+        <div className={`flex flex-col border-r border-[var(--t-border)] transition-all ${detail ? 'hidden lg:flex lg:w-[55%]' : 'flex-1'}`}>
           {/* Search */}
           <div className="px-8 py-4 border-b border-[var(--t-border)] bg-[var(--t-surface)]">
             <div className="flex items-center gap-3 border-b border-[var(--t-border-s)] pb-2 focus-within:border-[var(--t-accent)] transition-colors">
@@ -140,7 +140,7 @@ export default function CustomersPage() {
         {/* Detail panel */}
         {detail && (
           <div className="flex-1 flex flex-col overflow-hidden bg-[var(--t-bg)]">
-            <div className="px-8 py-5 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-start justify-between shrink-0">
+            <div className="px-4 lg:px-8 py-4 lg:py-5 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-start justify-between shrink-0">
               <div>
                 <p className="text-base font-light text-[var(--t-text)] tracking-wide mb-1">{detail.name}</p>
                 <p className="text-xs text-[var(--t-text-3)] tracking-wide">{detail.phone}</p>
@@ -148,11 +148,11 @@ export default function CustomersPage() {
               <div className="flex items-center gap-3">
                 <button onClick={() => openEdit(detail)} className="text-[10px] tracking-wide text-[var(--t-text-3)] hover:text-[var(--t-accent)] transition-colors">編輯</button>
                 <button onClick={() => handleDelete(detail.id, detail.name)} className="text-[10px] tracking-wide text-[var(--t-text-3)] hover:text-[#A05050] transition-colors">刪除</button>
-                <button onClick={() => setDetail(null)} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none transition-colors ml-2">×</button>
+                <button onClick={() => setDetail(null)} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none transition-colors ml-2" aria-label="關閉">×</button>
               </div>
             </div>
 
-            <div className="flex-1 overflow-auto p-8 space-y-6">
+            <div className="flex-1 overflow-auto p-4 lg:p-8 space-y-6">
               {/* Basic info */}
               <div className="bg-[var(--t-surface)] border border-[var(--t-border)] px-7 py-5">
                 <div className="grid grid-cols-2 gap-y-4">

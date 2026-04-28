@@ -35,9 +35,9 @@ export default async function DashboardPage() {
         </button>
       </header>
 
-      <main className="flex-1 bg-[var(--t-bg)] p-8 overflow-auto">
+      <main className="flex-1 bg-[var(--t-bg)] p-4 lg:p-8 overflow-auto">
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-5 mb-10">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5 mb-8 lg:mb-10">
           {statsCards.map(({ label, value, sub, icon: Icon, accent, warn, href }) => (
             <Link key={label} href={href}
               className="bg-[var(--t-surface)] border border-[var(--t-border)] p-6 hover:border-[var(--t-border-s)] transition-colors group block">
@@ -56,12 +56,12 @@ export default async function DashboardPage() {
         </div>
 
         {/* Recent appointments */}
-        <div className="bg-[var(--t-surface)] border border-[var(--t-border)]">
-          <div className="px-8 py-5 border-b border-[var(--t-border)] flex items-center justify-between">
+        <div className="bg-[var(--t-surface)] border border-[var(--t-border)] overflow-hidden">
+          <div className="px-4 lg:px-8 py-4 lg:py-5 border-b border-[var(--t-border)] flex items-center justify-between">
             <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-2)] uppercase">近期預約</p>
             <span className="text-[10px] text-[var(--t-text-4)] tracking-wide">4 筆</span>
           </div>
-          <table className="w-full">
+          <div className="overflow-x-auto"><table className="w-full min-w-[480px]">
             <thead>
               <tr className="border-b border-[var(--t-border)]">
                 {['顧客', '服務', '時間', '狀態'].map((h) => (
@@ -83,7 +83,7 @@ export default async function DashboardPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       </main>
     </div>

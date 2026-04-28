@@ -57,12 +57,12 @@ export default function SettingsPage() {
         </button>
       </header>
 
-      <main className="flex-1 bg-[var(--t-bg)] p-8 overflow-auto">
+      <main className="flex-1 bg-[var(--t-bg)] p-4 lg:p-8 overflow-auto">
         <div className="bg-[var(--t-surface)] border border-[var(--t-border)]">
           <div className="px-8 py-5 border-b border-[var(--t-border)]">
             <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-2)] uppercase">管理員帳號</p>
           </div>
-          <table className="w-full">
+          <div className="overflow-x-auto"><table className="w-full min-w-[560px]">
             <thead>
               <tr className="border-b border-[var(--t-border)]">
                 {['姓名', '帳號', '功能權限', ''].map((h, i) => (
@@ -91,7 +91,7 @@ export default function SettingsPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </div>
       </main>
 

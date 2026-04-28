@@ -66,7 +66,7 @@ export default function ServicesPage() {
         </button>
       </header>
 
-      <main className="flex-1 bg-[var(--t-bg)] p-8 overflow-auto">
+      <main className="flex-1 bg-[var(--t-bg)] p-4 lg:p-8 overflow-auto">
         {/* Category tabs */}
         <div className="flex items-center gap-6 mb-8 border-b border-[var(--t-border)] pb-0">
           {(['全部', ...CATEGORIES] as const).map(cat => (
@@ -95,8 +95,8 @@ export default function ServicesPage() {
                   <div className="flex-1 h-px bg-[var(--t-border)]" />
                   <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">{items.length} 項</p>
                 </div>
-                <div className="bg-[var(--t-surface)] border border-[var(--t-border)]">
-                  <table className="w-full table-fixed">
+                <div className="bg-[var(--t-surface)] border border-[var(--t-border)] overflow-x-auto">
+                  <table className="w-full min-w-[480px] table-fixed">
                     <colgroup>
                       <col className="w-auto" />
                       <col style={{width:'120px'}} />
