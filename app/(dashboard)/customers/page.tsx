@@ -218,11 +218,11 @@ export default function CustomersPage() {
             </div>
             <div className="space-y-5">
               {([
-                { label: '姓名', key: 'name', placeholder: '王小明' },
-                { label: '電話', key: 'phone', placeholder: '0912-345-678' },
-                { label: '生日', key: 'birthday', placeholder: '1990-01-01', type: 'date' },
-                { label: '備註', key: 'note', placeholder: '選填' },
-              ] as const).map(({ label, key, placeholder, type }) => (
+                { label: '姓名', key: 'name' as const, placeholder: '王小明', type: 'text' },
+                { label: '電話', key: 'phone' as const, placeholder: '0912-345-678', type: 'text' },
+                { label: '生日', key: 'birthday' as const, placeholder: '1990-01-01', type: 'date' },
+                { label: '備註', key: 'note' as const, placeholder: '選填', type: 'text' },
+              ]).map(({ label, key, placeholder, type }) => (
                 <div key={key}>
                   <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">{label}</label>
                   <input type={type ?? 'text'} placeholder={placeholder} value={form[key]}
