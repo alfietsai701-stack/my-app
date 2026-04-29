@@ -1,14 +1,26 @@
 import { prisma } from './prisma'
 
 const DEFAULT_SLOTS = ['11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00']
-const BUFFER_MIN    = 60   // 緩衝時間（分鐘）
-const CLOSING_MIN   = 20 * 60  // 20:00 closing
+const BUFFER_MIN    = 60
+const CLOSING_MIN   = 20 * 60
+
+// In-memory cache: avoids a DB round-trip on every slot query (TTL 5 min)
+let _slotsCache: string[] | null = null
+let _slotsCachedAt = 0
+const SLOTS_TTL = 5 * 60 * 1000
 
 export async function getBusinessSlots(): Promise<string[]> {
+  if (_slotsCache && Date.now() - _slotsCachedAt < SLOTS_TTL) return _slotsCache
   try {
     const setting = await prisma.setting.findUnique({ where: { key: 'business_slots' } })
-    if (setting?.value) return setting.value as string[]
+    if (setting?.value) {
+      _slotsCache = setting.value as string[]
+      _slotsCachedAt = Date.now()
+      return _slotsCache
+    }
   } catch {}
+  _slotsCache = DEFAULT_SLOTS
+  _slotsCachedAt = Date.now()
   return DEFAULT_SLOTS
 }
 
