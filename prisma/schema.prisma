@@ -27,6 +27,8 @@ model Service {
   durationMin  Int
   category     String
   appointments Appointment[]
+
+  @@index([category])
 }
 
 model Appointment {
@@ -40,6 +42,9 @@ model Appointment {
   customer    Customer  @relation(fields: [customerId], references: [id])
   service     Service   @relation(fields: [serviceId], references: [id])
   receipt     Receipt?
+
+  @@index([scheduledAt, status])
+  @@index([customerId])
 }
 
 model Receipt {

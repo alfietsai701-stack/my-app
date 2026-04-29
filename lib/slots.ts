@@ -7,7 +7,7 @@ const CLOSING_MIN   = 20 * 60
 // In-memory cache: avoids a DB round-trip on every slot query (TTL 5 min)
 let _slotsCache: string[] | null = null
 let _slotsCachedAt = 0
-const SLOTS_TTL = 5 * 60 * 1000
+const SLOTS_TTL = 10 * 60 * 1000
 
 export async function getBusinessSlots(): Promise<string[]> {
   if (_slotsCache && Date.now() - _slotsCachedAt < SLOTS_TTL) return _slotsCache

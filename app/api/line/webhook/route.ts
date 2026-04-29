@@ -25,6 +25,36 @@ type BookingData = {
   note?:            string
 }
 
+type CachedService = { id: string; name: string; price: number; durationMin: number; category: string }
+
+// ── In-memory service cache ───────────────────────────────────────────────────
+
+let _svcCache: { byCategory: Map<string, CachedService[]>; at: number } | null = null
+const SVC_TTL = 10 * 60 * 1000
+
+async function loadServiceCache(): Promise<void> {
+  const all = await prisma.service.findMany({
+    select: { id: true, name: true, price: true, durationMin: true, category: true },
+    orderBy: { price: 'asc' },
+  })
+  const map = new Map<string, CachedService[]>()
+  for (const s of all) {
+    const list = map.get(s.category) ?? []
+    list.push(s)
+    map.set(s.category, list)
+  }
+  _svcCache = { byCategory: map, at: Date.now() }
+}
+
+async function getServicesForCategory(category: string): Promise<CachedService[]> {
+  if (!_svcCache || Date.now() - _svcCache.at > SVC_TTL) await loadServiceCache()
+  return _svcCache!.byCategory.get(category) ?? []
+}
+
+function findService(name: string, category: string): CachedService | undefined {
+  return _svcCache?.byCategory.get(category)?.find(s => s.name === name)
+}
+
 // ── Signature verification ────────────────────────────────────────────────────
 
 function verifySignature(body: string, signature: string): boolean {
@@ -71,13 +101,16 @@ async function resetSession(lineUserId: string) {
 const CATEGORIES = ['身體按摩', '臉部護理', '特別療癒套組']
 
 async function handleStart(token: string, lineUserId: string) {
+  // saveSession upserts — no need to delete first; warm service cache in parallel
   await Promise.all([
-    resetSession(lineUserId).then(() => saveSession(lineUserId, 'SELECT_CATEGORY', {})),
+    saveSession(lineUserId, 'SELECT_CATEGORY', {}),
     replyQuickReply(token, '您好！歡迎預約 Ada 慢療室 🌿\n請選擇服務類別：', [
       { label: '身體按摩', text: '身體按摩' },
       { label: '臉部護理', text: '臉部護理' },
       { label: '特別療癒套組', text: '特別療癒套組' },
     ]),
+    // warm cache so next step hits memory, not DB
+    (_svcCache && Date.now() - _svcCache.at < SVC_TTL) ? Promise.resolve() : loadServiceCache(),
   ])
 }
 
@@ -90,7 +123,7 @@ async function handleSelectCategory(token: string, lineUserId: string, text: str
     ])
     return
   }
-  const services = await prisma.service.findMany({ where: { category: text }, orderBy: { price: 'asc' } })
+  const services = await getServicesForCategory(text)
   if (services.length === 0) {
     await replyQuickReply(token, '此類別目前無可預約服務，請選擇其他類別：', [
       { label: '身體按摩', text: '身體按摩' },
@@ -109,7 +142,9 @@ async function handleSelectCategory(token: string, lineUserId: string, text: str
 }
 
 async function handleSelectService(token: string, lineUserId: string, text: string, data: BookingData) {
-  const service = await prisma.service.findFirst({ where: { name: text, category: data.category } })
+  // Try cache first; fall back to DB if cache miss
+  const service = findService(text, data.category ?? '')
+    ?? await prisma.service.findFirst({ where: { name: text, category: data.category } })
   if (!service) {
     await replyText(token, '找不到該服務，請重新選擇。')
     return
@@ -150,7 +185,6 @@ async function handleSelectDate(token: string, lineUserId: string, date: string,
 }
 
 async function handleSelectTime(token: string, lineUserId: string, text: string, data: BookingData) {
-  // Skip re-querying slots — user selected from buttons we provided
   if (!/^\d{2}:\d{2}$/.test(text)) {
     await replyText(token, '請從選項中選擇時間。')
     return
@@ -216,16 +250,19 @@ async function handleAskNote(token: string, lineUserId: string, text: string, da
 async function handleConfirm(token: string, lineUserId: string, data: BookingData) {
   const { serviceId, serviceName, date, time, name, phone, note } = data
   if (!serviceId || !date || !time || !name || !phone) {
-    await replyText(token, '資料不完整，請重新預約。')
-    await resetSession(lineUserId)
+    await Promise.all([
+      replyText(token, '資料不完整，請重新預約。'),
+      resetSession(lineUserId),
+    ])
     return
   }
 
-  // Upsert customer — handles new and soft-deleted customers
+  // Upsert customer then create appointment (sequential: appointment needs customerId)
   const customer = await prisma.customer.upsert({
     where:  { phone },
     update: { deletedAt: null },
     create: { name, phone },
+    select: { id: true },
   })
 
   // Store in UTC: Taiwan is UTC+8
@@ -235,6 +272,7 @@ async function handleConfirm(token: string, lineUserId: string, data: BookingDat
 
   const appt = await prisma.appointment.create({
     data: { customerId: customer.id, serviceId, scheduledAt, note: note ? `（LINE 預約）${note}` : '（LINE 預約）' },
+    select: { id: true },
   })
 
   const [ym, mm, dd] = date.split('-')
@@ -280,79 +318,82 @@ const MENU_KEYWORDS: Record<string, (token: string, lineUserId: string) => Promi
 
 // ── Event processor ───────────────────────────────────────────────────────────
 
-async function processEvents(events: unknown[]) {
-  for (const event of events) {
-    const ev = event as Record<string, unknown>
+async function processEvent(event: unknown) {
+  const ev = event as Record<string, unknown>
 
-    // ── Postback (datetime picker) ────────────────────────────────────────
-    if (ev.type === 'postback') {
-      const lineUserId = (ev.source as Record<string, string>)?.userId
-      const replyToken = ev.replyToken as string
-      if (!lineUserId || !replyToken) continue
-
-      const postback = ev.postback as Record<string, unknown>
-      if (postback?.data === 'SELECT_DATE' && (postback?.params as Record<string, string>)?.date) {
-        const selectedDate = (postback.params as Record<string, string>).date
-        const { step, data } = await getSession(lineUserId)
-        if (step === 'SELECT_DATE') {
-          try {
-            await handleSelectDate(replyToken, lineUserId, selectedDate, data)
-          } catch (err) {
-            console.error('LINE postback error:', err)
-            await replyText(replyToken, '系統忙碌，請稍後再試一次。').catch(() => {})
-          }
-        }
-      }
-      continue
-    }
-
-    // ── Text message ─────────────────────────────────────────────────────
-    if ((ev.type as string) !== 'message') continue
-    const msg = ev.message as Record<string, unknown>
-    if (msg?.type !== 'text') continue
-
+  // ── Postback (datetime picker) ────────────────────────────────────────
+  if (ev.type === 'postback') {
     const lineUserId = (ev.source as Record<string, string>)?.userId
     const replyToken = ev.replyToken as string
-    const text       = (msg.text as string).trim()
-    if (!lineUserId || !replyToken) continue
+    if (!lineUserId || !replyToken) return
 
-    if (text in MENU_KEYWORDS) {
-      if (text === '__BOOKING__') await resetSession(lineUserId)
-      await MENU_KEYWORDS[text](replyToken, lineUserId)
-      continue
-    }
-
-    const { step, data } = await getSession(lineUserId)
-    if (step === 'START') continue
-
-    if (['重新開始', '取消', '離開'].includes(text)) {
-      await resetSession(lineUserId)
-      continue
-    }
-
-    try {
-      switch (step) {
-        case 'SELECT_CATEGORY': await handleSelectCategory(replyToken, lineUserId, text, data); break
-        case 'SELECT_SERVICE':  await handleSelectService(replyToken, lineUserId, text, data);  break
-        case 'SELECT_DATE': {
-          const { minDate, maxDate } = getDateRange()
-          await replyDatePicker(replyToken, '請點選按鈕選擇預約日期：', minDate, maxDate)
-          break
+    const postback = ev.postback as Record<string, unknown>
+    if (postback?.data === 'SELECT_DATE' && (postback?.params as Record<string, string>)?.date) {
+      const selectedDate = (postback.params as Record<string, string>).date
+      const { step, data } = await getSession(lineUserId)
+      if (step === 'SELECT_DATE') {
+        try {
+          await handleSelectDate(replyToken, lineUserId, selectedDate, data)
+        } catch (err) {
+          console.error('LINE postback error:', err)
+          await replyText(replyToken, '系統忙碌，請稍後再試一次。').catch(() => {})
         }
-        case 'SELECT_TIME': await handleSelectTime(replyToken, lineUserId, text, data); break
-        case 'ASK_NAME':    await handleAskName(replyToken, lineUserId, text, data);   break
-        case 'ASK_PHONE':   await handleAskPhone(replyToken, lineUserId, text, data);  break
-        case 'ASK_NOTE':    await handleAskNote(replyToken, lineUserId, text, data);   break
-        case 'CONFIRM':
-          if (text === '確認預約') await handleConfirm(replyToken, lineUserId, data)
-          else await resetSession(lineUserId)
-          break
       }
-    } catch (err) {
-      console.error('LINE webhook error:', err)
-      await replyText(replyToken, '系統忙碌，請稍後再傳一次。').catch(() => {})
     }
+    return
   }
+
+  // ── Text message ─────────────────────────────────────────────────────
+  if ((ev.type as string) !== 'message') return
+  const msg = ev.message as Record<string, unknown>
+  if (msg?.type !== 'text') return
+
+  const lineUserId = (ev.source as Record<string, string>)?.userId
+  const replyToken = ev.replyToken as string
+  const text       = (msg.text as string).trim()
+  if (!lineUserId || !replyToken) return
+
+  if (text in MENU_KEYWORDS) {
+    // __BOOKING__ calls handleStart which upserts session — no separate reset needed
+    await MENU_KEYWORDS[text](replyToken, lineUserId)
+    return
+  }
+
+  const { step, data } = await getSession(lineUserId)
+  if (step === 'START') return
+
+  if (['重新開始', '取消', '離開'].includes(text)) {
+    await resetSession(lineUserId)
+    return
+  }
+
+  try {
+    switch (step) {
+      case 'SELECT_CATEGORY': await handleSelectCategory(replyToken, lineUserId, text, data); break
+      case 'SELECT_SERVICE':  await handleSelectService(replyToken, lineUserId, text, data);  break
+      case 'SELECT_DATE': {
+        const { minDate, maxDate } = getDateRange()
+        await replyDatePicker(replyToken, '請點選按鈕選擇預約日期：', minDate, maxDate)
+        break
+      }
+      case 'SELECT_TIME': await handleSelectTime(replyToken, lineUserId, text, data); break
+      case 'ASK_NAME':    await handleAskName(replyToken, lineUserId, text, data);   break
+      case 'ASK_PHONE':   await handleAskPhone(replyToken, lineUserId, text, data);  break
+      case 'ASK_NOTE':    await handleAskNote(replyToken, lineUserId, text, data);   break
+      case 'CONFIRM':
+        if (text === '確認預約') await handleConfirm(replyToken, lineUserId, data)
+        else await resetSession(lineUserId)
+        break
+    }
+  } catch (err) {
+    console.error('LINE webhook error:', err)
+    await replyText(replyToken, '系統忙碌，請稍後再傳一次。').catch(() => {})
+  }
+}
+
+async function processEvents(events: unknown[]) {
+  // Events from the same user are rare to batch; parallel processing is safe
+  await Promise.all(events.map(e => processEvent(e)))
 }
 
 // ── Main webhook handler ──────────────────────────────────────────────────────
