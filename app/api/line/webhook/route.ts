@@ -8,7 +8,7 @@ const BASE_URL = process.env.NEXTAUTH_URL?.replace('http://localhost:3000', 'htt
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type Step = 'START' | 'SELECT_CATEGORY' | 'SELECT_SERVICE' | 'SELECT_DATE' | 'SELECT_TIME' | 'ASK_NAME' | 'ASK_PHONE' | 'CONFIRM'
+type Step = 'START' | 'SELECT_CATEGORY' | 'SELECT_SERVICE' | 'SELECT_DATE' | 'SELECT_TIME' | 'ASK_NAME' | 'ASK_PHONE' | 'ASK_NOTE' | 'CONFIRM'
 
 type BookingData = {
   category?:        string
@@ -20,6 +20,7 @@ type BookingData = {
   time?:            string  // HH:MM
   name?:            string
   phone?:           string
+  note?:            string
 }
 
 // ── Signature verification ────────────────────────────────────────────────────
@@ -170,11 +171,19 @@ async function handleAskPhone(token: string, lineUserId: string, text: string, d
     await replyText(token, '請輸入正確的手機號碼（格式：09xxxxxxxx）。')
     return
   }
-  const updated = { ...data, phone }
+  await saveSession(lineUserId, 'ASK_NOTE', { ...data, phone })
+  await replyQuickReply(token, '最後，請問有什麼需要特別告知的事項嗎？\n（例如：身體狀況、過敏史、特殊需求等）', [
+    { label: '略過', text: '略過' },
+  ])
+}
+
+async function handleAskNote(token: string, lineUserId: string, text: string, data: BookingData) {
+  const note = text === '略過' ? null : text
+  const updated = { ...data, note: note ?? undefined }
   await saveSession(lineUserId, 'CONFIRM', updated)
 
   const [y, m, d] = (updated.date ?? '').split('-')
-  const summary = [
+  const summaryLines = [
     `📋 預約確認`,
     ``,
     `服務：${updated.serviceName}`,
@@ -184,7 +193,9 @@ async function handleAskPhone(token: string, lineUserId: string, text: string, d
     `費用：NT$ ${updated.servicePrice?.toLocaleString()}`,
     `姓名：${updated.name}`,
     `電話：${updated.phone}`,
-  ].join('\n')
+  ]
+  if (updated.note) summaryLines.push(`備註：${updated.note}`)
+  const summary = summaryLines.join('\n')
 
   await replyQuickReply(token, summary + '\n\n以上資訊是否正確？', [
     { label: '✅ 確認預約', text: '確認預約' },
@@ -193,7 +204,7 @@ async function handleAskPhone(token: string, lineUserId: string, text: string, d
 }
 
 async function handleConfirm(token: string, lineUserId: string, data: BookingData) {
-  const { serviceId, serviceName, date, time, name, phone, servicePrice } = data
+  const { serviceId, serviceName, date, time, name, phone, servicePrice, note } = data
   if (!serviceId || !date || !time || !name || !phone) {
     await replyText(token, '資料不完整，請重新預約。')
     await resetSession(lineUserId)
@@ -211,7 +222,7 @@ async function handleConfirm(token: string, lineUserId: string, data: BookingDat
   const scheduledAt = new Date(y, m-1, d, h, min, 0)
 
   const appt = await prisma.appointment.create({
-    data: { customerId: customer.id, serviceId, scheduledAt, note: '（LINE 預約）' },
+    data: { customerId: customer.id, serviceId, scheduledAt, note: note ? `（LINE 預約）${note}` : '（LINE 預約）' },
   })
 
   await resetSession(lineUserId)
@@ -317,6 +328,7 @@ export async function POST(req: NextRequest) {
         case 'SELECT_TIME':      await handleSelectTime(replyToken, lineUserId, text, data);      break
         case 'ASK_NAME':         await handleAskName(replyToken, lineUserId, text, data);         break
         case 'ASK_PHONE':        await handleAskPhone(replyToken, lineUserId, text, data);        break
+        case 'ASK_NOTE':         await handleAskNote(replyToken, lineUserId, text, data);         break
         case 'CONFIRM':
           if (text === '確認預約') await handleConfirm(replyToken, lineUserId, data)
           else { await resetSession(lineUserId) }
