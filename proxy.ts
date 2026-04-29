@@ -6,7 +6,12 @@ const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET)
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  if (pathname.startsWith('/login') || pathname.startsWith('/api/auth') || pathname.startsWith('/api/line')) {
+  if (
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/line') ||
+    /\.(png|jpg|jpeg|gif|webp|svg|ico)$/.test(pathname)
+  ) {
     return NextResponse.next()
   }
 
