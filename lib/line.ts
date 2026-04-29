@@ -42,6 +42,37 @@ export async function replyImage(replyToken: string, imageUrl: string, previewUr
   })
 }
 
+export async function replyDatePicker(
+  replyToken: string,
+  text: string,
+  minDate: string,
+  maxDate: string,
+) {
+  await fetch(LINE_REPLY_API, {
+    method: 'POST',
+    headers: headers(),
+    body: JSON.stringify({
+      replyToken,
+      messages: [{
+        type: 'template',
+        altText: text,
+        template: {
+          type: 'buttons',
+          text: text.slice(0, 160),
+          actions: [{
+            type: 'datetimepicker',
+            label: '📅 選擇日期',
+            data: 'SELECT_DATE',
+            mode: 'date',
+            min: minDate,
+            max: maxDate,
+          }],
+        },
+      }],
+    }),
+  })
+}
+
 export async function replyQuickReply(
   replyToken: string,
   text: string,

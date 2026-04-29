@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { prisma } from '@/lib/prisma'
-import { replyText, replyImage, replyQuickReply, sendLineMessage } from '@/lib/line'
+import { replyText, replyImage, replyQuickReply, replyDatePicker, sendLineMessage } from '@/lib/line'
 import { getAvailableSlots as getAvailableSlotsFromDB } from '@/lib/slots'
 
 const BASE_URL = process.env.NEXTAUTH_URL?.replace('http://localhost:3000', 'https://my-app-taupe-three-92.vercel.app') ?? 'https://my-app-taupe-three-92.vercel.app'
@@ -34,20 +34,16 @@ function verifySignature(body: string, signature: string): boolean {
 
 // ── Date/time helpers ─────────────────────────────────────────────────────────
 
-
-function getUpcomingDates(count = 7): { label: string; value: string }[] {
-  const dates = []
+function getDateRange(): { minDate: string; maxDate: string } {
   const now = new Date()
-  for (let i = 1; i <= count + 3 && dates.length < count; i++) {
-    const d = new Date(now)
-    d.setDate(now.getDate() + i)
-    const dow = d.getDay()
-    if (dow === 0) continue // skip Sunday (adjust for your business)
-    const value = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
-    const label = `${d.getMonth()+1}/${d.getDate()}（${['日','一','二','三','四','五','六'][dow]}）`
-    dates.push({ label, value })
-  }
-  return dates
+  const tomorrow = new Date(now)
+  tomorrow.setDate(now.getDate() + 1)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const minDate = `${tomorrow.getFullYear()}-${pad(tomorrow.getMonth()+1)}-${pad(tomorrow.getDate())}`
+  // max = last day of next month
+  const lastDay = new Date(now.getFullYear(), now.getMonth() + 2, 0)
+  const maxDate = `${lastDay.getFullYear()}-${pad(lastDay.getMonth()+1)}-${pad(lastDay.getDate())}`
+  return { minDate, maxDate }
 }
 
 async function getAvailableSlots(date: string, durationMin: number): Promise<string[]> {
@@ -117,7 +113,6 @@ async function handleSelectService(token: string, lineUserId: string, text: stri
     await replyText(token, '找不到該服務，請重新選擇。')
     return
   }
-  const dates = getUpcomingDates(7)
   await saveSession(lineUserId, 'SELECT_DATE', {
     ...data,
     serviceId:       service.id,
@@ -125,25 +120,28 @@ async function handleSelectService(token: string, lineUserId: string, text: stri
     servicePrice:    service.price,
     serviceDuration: service.durationMin,
   })
-  await replyQuickReply(token, `已選：${service.name}（${service.durationMin}分鐘）\n請選擇預約日期：`,
-    dates.map(d => ({ label: d.label, text: d.value }))
-  )
+  const { minDate, maxDate } = getDateRange()
+  await replyDatePicker(token, `已選：${service.name}（${service.durationMin}分鐘）\n請點選按鈕選擇預約日期：`, minDate, maxDate)
 }
 
-async function handleSelectDate(token: string, lineUserId: string, text: string, data: BookingData) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    await replyText(token, '請從選項中選擇日期。')
+async function handleSelectDate(token: string, lineUserId: string, date: string, data: BookingData) {
+  const { minDate, maxDate } = getDateRange()
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    await replyDatePicker(token, '請點選按鈕選擇預約日期：', minDate, maxDate)
     return
   }
-  const slots = await getAvailableSlots(text, data.serviceDuration ?? 60)
+  const [y, m, d] = date.split('-').map(Number)
+  if (new Date(y, m - 1, d).getDay() === 0) {
+    await replyDatePicker(token, '週日公休，請選擇其他日期：', minDate, maxDate)
+    return
+  }
+  const slots = await getAvailableSlots(date, data.serviceDuration ?? 60)
   if (slots.length === 0) {
-    await replyText(token, `${text} 當天已無可預約時段，請選擇其他日期。`)
-    const dates = getUpcomingDates(7)
-    await replyQuickReply(token, '請重新選擇日期：', dates.map(d => ({ label: d.label, text: d.value })))
+    await replyDatePicker(token, `${date} 當天已無可預約時段，請選擇其他日期：`, minDate, maxDate)
     return
   }
-  await saveSession(lineUserId, 'SELECT_TIME', { ...data, date: text })
-  await replyQuickReply(token, `${text} 可預約時段：`, slots.map(s => ({ label: s, text: s })))
+  await saveSession(lineUserId, 'SELECT_TIME', { ...data, date })
+  await replyQuickReply(token, `${date} 可預約時段：`, slots.map(s => ({ label: s, text: s })))
 }
 
 async function handleSelectTime(token: string, lineUserId: string, text: string, data: BookingData) {
@@ -294,6 +292,27 @@ export async function POST(req: NextRequest) {
   const body = JSON.parse(rawBody)
 
   for (const event of body.events ?? []) {
+    // ── Postback (datetime picker) ──────────────────────────────────────────
+    if (event.type === 'postback') {
+      const lineUserId = event.source?.userId as string
+      const replyToken = event.replyToken as string
+      if (!lineUserId || !replyToken) continue
+
+      if (event.postback?.data === 'SELECT_DATE' && event.postback?.params?.date) {
+        const { step, data } = await getSession(lineUserId)
+        if (step === 'SELECT_DATE') {
+          try {
+            await handleSelectDate(replyToken, lineUserId, event.postback.params.date, data)
+          } catch (err) {
+            console.error('LINE postback error:', err)
+            await replyText(replyToken, '發生錯誤，請稍後再試。').catch(() => {})
+          }
+        }
+      }
+      continue
+    }
+
+    // ── Message ─────────────────────────────────────────────────────────────
     if (event.type !== 'message' || event.message?.type !== 'text') continue
 
     const lineUserId  = event.source?.userId as string
@@ -324,7 +343,12 @@ export async function POST(req: NextRequest) {
       switch (step) {
         case 'SELECT_CATEGORY':  await handleSelectCategory(replyToken, lineUserId, text, data);  break
         case 'SELECT_SERVICE':   await handleSelectService(replyToken, lineUserId, text, data);   break
-        case 'SELECT_DATE':      await handleSelectDate(replyToken, lineUserId, text, data);      break
+        case 'SELECT_DATE': {
+          // User typed instead of using the picker — re-show the picker
+          const { minDate, maxDate } = getDateRange()
+          await replyDatePicker(replyToken, '請點選按鈕選擇預約日期：', minDate, maxDate)
+          break
+        }
         case 'SELECT_TIME':      await handleSelectTime(replyToken, lineUserId, text, data);      break
         case 'ASK_NAME':         await handleAskName(replyToken, lineUserId, text, data);         break
         case 'ASK_PHONE':        await handleAskPhone(replyToken, lineUserId, text, data);        break
