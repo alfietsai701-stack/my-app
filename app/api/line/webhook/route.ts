@@ -294,7 +294,7 @@ export async function POST(req: NextRequest) {
     // Allow reset at any step
     if (['重新開始', '取消', '離開'].includes(text)) {
       await resetSession(lineUserId)
-      await handleStart(replyToken, lineUserId)
+      await replyText(replyToken, '已重置。請使用下方選單選擇功能，或輸入「預約」開始預約流程 🌿')
       continue
     }
 
@@ -302,22 +302,30 @@ export async function POST(req: NextRequest) {
 
     try {
       switch (step) {
-        case 'START':            await handleStart(replyToken, lineUserId);                              break
-        case 'SELECT_CATEGORY':  await handleSelectCategory(replyToken, lineUserId, text, data);         break
-        case 'SELECT_SERVICE':   await handleSelectService(replyToken, lineUserId, text, data);          break
-        case 'SELECT_DATE':      await handleSelectDate(replyToken, lineUserId, text, data);             break
-        case 'SELECT_TIME':      await handleSelectTime(replyToken, lineUserId, text, data);             break
-        case 'ASK_NAME':         await handleAskName(replyToken, lineUserId, text, data);                break
-        case 'ASK_PHONE':        await handleAskPhone(replyToken, lineUserId, text, data);               break
+        case 'START':
+          // Only start booking if user explicitly asks
+          if (['預約', '我要預約', '線上預約'].includes(text)) {
+            await handleStart(replyToken, lineUserId)
+          } else {
+            await replyText(replyToken, '您好！請使用下方選單選擇服務 🌿\n\n若要預約，請點選「線上預約」，或輸入「預約」。')
+          }
+          break
+        case 'SELECT_CATEGORY':  await handleSelectCategory(replyToken, lineUserId, text, data);  break
+        case 'SELECT_SERVICE':   await handleSelectService(replyToken, lineUserId, text, data);   break
+        case 'SELECT_DATE':      await handleSelectDate(replyToken, lineUserId, text, data);      break
+        case 'SELECT_TIME':      await handleSelectTime(replyToken, lineUserId, text, data);      break
+        case 'ASK_NAME':         await handleAskName(replyToken, lineUserId, text, data);         break
+        case 'ASK_PHONE':        await handleAskPhone(replyToken, lineUserId, text, data);        break
         case 'CONFIRM':
           if (text === '確認預約') await handleConfirm(replyToken, lineUserId, data)
-          else { await resetSession(lineUserId); await handleStart(replyToken, lineUserId) }
+          else { await resetSession(lineUserId); await replyText(replyToken, '已取消預約。請使用下方選單繼續操作 🌿') }
           break
-        default:                 await handleStart(replyToken, lineUserId)
+        default:
+          await replyText(replyToken, '請使用下方選單選擇服務 🌿')
       }
     } catch (err) {
       console.error('LINE webhook error:', err)
-      await replyText(replyToken, '發生錯誤，請重新傳訊息開始預約。').catch(() => {})
+      await replyText(replyToken, '發生錯誤，請稍後再試或重新操作。').catch(() => {})
       await resetSession(lineUserId)
     }
   }
