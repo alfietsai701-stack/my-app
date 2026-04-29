@@ -298,25 +298,19 @@ export async function POST(req: NextRequest) {
       continue
     }
 
-    // Allow reset at any step
+    const { step, data } = await getSession(lineUserId)
+
+    // Only respond if user is in the middle of a booking flow
+    if (step === 'START') continue
+
+    // Allow reset at any step during active booking
     if (['重新開始', '取消', '離開'].includes(text)) {
       await resetSession(lineUserId)
-      await replyText(replyToken, '已重置。請使用下方選單選擇功能，或輸入「預約」開始預約流程 🌿')
       continue
     }
 
-    const { step, data } = await getSession(lineUserId)
-
     try {
       switch (step) {
-        case 'START':
-          // Only start booking if user explicitly asks
-          if (['預約', '我要預約', '線上預約'].includes(text)) {
-            await handleStart(replyToken, lineUserId)
-          } else {
-            await replyText(replyToken, '您好！請使用下方選單選擇服務 🌿\n\n若要預約，請點選「線上預約」，或輸入「預約」。')
-          }
-          break
         case 'SELECT_CATEGORY':  await handleSelectCategory(replyToken, lineUserId, text, data);  break
         case 'SELECT_SERVICE':   await handleSelectService(replyToken, lineUserId, text, data);   break
         case 'SELECT_DATE':      await handleSelectDate(replyToken, lineUserId, text, data);      break
@@ -325,14 +319,12 @@ export async function POST(req: NextRequest) {
         case 'ASK_PHONE':        await handleAskPhone(replyToken, lineUserId, text, data);        break
         case 'CONFIRM':
           if (text === '確認預約') await handleConfirm(replyToken, lineUserId, data)
-          else { await resetSession(lineUserId); await replyText(replyToken, '已取消預約。請使用下方選單繼續操作 🌿') }
+          else { await resetSession(lineUserId) }
           break
-        default:
-          await replyText(replyToken, '請使用下方選單選擇服務 🌿')
       }
     } catch (err) {
       console.error('LINE webhook error:', err)
-      await replyText(replyToken, '發生錯誤，請稍後再試或重新操作。').catch(() => {})
+      await replyText(replyToken, '發生錯誤，請稍後再試。').catch(() => {})
       await resetSession(lineUserId)
     }
   }
