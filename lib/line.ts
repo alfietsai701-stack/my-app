@@ -31,13 +31,13 @@ export async function replyText(replyToken: string, text: string) {
   })
 }
 
-export async function replyImage(replyToken: string, imageUrl: string) {
+export async function replyImage(replyToken: string, imageUrl: string, previewUrl?: string) {
   await fetch(LINE_REPLY_API, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify({
       replyToken,
-      messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: imageUrl }],
+      messages: [{ type: 'image', originalContentUrl: imageUrl, previewImageUrl: previewUrl ?? imageUrl }],
     }),
   })
 }

@@ -244,11 +244,11 @@ async function handleConfirm(token: string, lineUserId: string, data: BookingDat
 // ── Menu handlers ─────────────────────────────────────────────────────────────
 
 async function handlePriceList(token: string) {
-  await replyImage(token, `${BASE_URL}/price-list.png`)
+  await replyImage(token, `${BASE_URL}/price-list.png`, `${BASE_URL}/price-list-preview.png`)
 }
 
 async function handleNotes(token: string) {
-  await replyImage(token, `${BASE_URL}/booking-notes.png`)
+  await replyImage(token, `${BASE_URL}/booking-notes.png`, `${BASE_URL}/booking-notes-preview.png`)
 }
 
 async function handlePromotion(token: string) {
