@@ -27,10 +27,11 @@ export async function getAvailableSlots(date: string, durationMin: number): Prom
   ])
 
   // Each existing appointment blocks [apptStart, apptStart + duration + buffer)
+  // Convert UTC → Taiwan time (UTC+8) before extracting hours
+  const TW_OFFSET_MS = 8 * 60 * 60 * 1000
   const blockedIntervals = appts.map(a => {
-    const h   = a.scheduledAt.getHours()
-    const min = a.scheduledAt.getMinutes()
-    const apptStart = h * 60 + min
+    const tw        = new Date(a.scheduledAt.getTime() + TW_OFFSET_MS)
+    const apptStart = tw.getUTCHours() * 60 + tw.getUTCMinutes()
     return { start: apptStart, end: apptStart + a.service.durationMin + BUFFER_MIN }
   })
 

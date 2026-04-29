@@ -6,6 +6,8 @@ import { getAvailableSlots as getAvailableSlotsFromDB } from '@/lib/slots'
 
 const BASE_URL = process.env.NEXTAUTH_URL?.replace('http://localhost:3000', 'https://my-app-taupe-three-92.vercel.app') ?? 'https://my-app-taupe-three-92.vercel.app'
 
+export const maxDuration = 30
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Step = 'START' | 'SELECT_CATEGORY' | 'SELECT_SERVICE' | 'SELECT_DATE' | 'SELECT_TIME' | 'ASK_NAME' | 'ASK_PHONE' | 'ASK_NOTE' | 'CONFIRM'
@@ -202,41 +204,44 @@ async function handleAskNote(token: string, lineUserId: string, text: string, da
 }
 
 async function handleConfirm(token: string, lineUserId: string, data: BookingData) {
-  const { serviceId, serviceName, date, time, name, phone, servicePrice, note } = data
+  const { serviceId, serviceName, date, time, name, phone, note } = data
   if (!serviceId || !date || !time || !name || !phone) {
     await replyText(token, '資料不完整，請重新預約。')
     await resetSession(lineUserId)
     return
   }
 
-  // Find or create customer
-  let customer = await prisma.customer.findFirst({ where: { phone, deletedAt: null } })
-  if (!customer) {
-    customer = await prisma.customer.create({ data: { name, phone } })
-  }
+  // Upsert customer — handles both new and soft-deleted customers
+  const customer = await prisma.customer.upsert({
+    where:  { phone },
+    update: { deletedAt: null },
+    create: { name, phone },
+  })
 
+  // Store as UTC: Taiwan is UTC+8, so subtract 8 hours
   const [y, m, d] = date.split('-').map(Number)
   const [h, min]  = time.split(':').map(Number)
-  const scheduledAt = new Date(y, m-1, d, h, min, 0)
+  const scheduledAt = new Date(Date.UTC(y, m - 1, d, h - 8, min, 0))
 
   const appt = await prisma.appointment.create({
     data: { customerId: customer.id, serviceId, scheduledAt, note: note ? `（LINE 預約）${note}` : '（LINE 預約）' },
   })
 
-  await resetSession(lineUserId)
-
   const [ym, mm, dd] = date.split('-')
-  await replyText(token,
+  const successMsg =
     `✅ 預約成功！\n\n${name} 您好，您的預約已確認：\n` +
     `服務：${serviceName}\n` +
     `日期：${ym}年${mm}月${dd}日 ${time}\n\n` +
     `如需更改請來電，期待為您服務 🌿`
-  )
 
-  // Notify admin
-  await sendLineMessage(
-    `📅 新預約（LINE）\n顧客：${name}（${phone}）\n服務：${serviceName}\n時間：${date} ${time}\n預約編號：${appt.id.slice(-6)}`
-  ).catch(() => {})
+  // Parallelize: reset session + reply to user + notify admin
+  await Promise.all([
+    resetSession(lineUserId),
+    replyText(token, successMsg),
+    sendLineMessage(
+      `📅 新預約（LINE）\n顧客：${name}（${phone}）\n服務：${serviceName}\n時間：${date} ${time}\n預約編號：${appt.id.slice(-6)}`
+    ).catch(() => {}),
+  ])
 }
 
 // ── Menu handlers ─────────────────────────────────────────────────────────────
@@ -360,8 +365,7 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       console.error('LINE webhook error:', err)
-      await replyText(replyToken, '發生錯誤，請稍後再試。').catch(() => {})
-      await resetSession(lineUserId)
+      await replyText(replyToken, '系統忙碌，請稍後再傳一次。').catch(() => {})
     }
   }
 
