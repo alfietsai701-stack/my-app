@@ -87,13 +87,20 @@ async function handleStart(token: string, lineUserId: string) {
 
 async function handleSelectCategory(token: string, lineUserId: string, text: string, data: BookingData) {
   if (!CATEGORIES.includes(text)) {
-    await handleStart(token, lineUserId)
+    await replyQuickReply(token, '請從以下選項選擇服務類別：', [
+      { label: '身體按摩', text: '身體按摩' },
+      { label: '臉部護理', text: '臉部護理' },
+      { label: '特別療癒套組', text: '特別療癒套組' },
+    ])
     return
   }
   const services = await prisma.service.findMany({ where: { category: text }, orderBy: { price: 'asc' } })
   if (services.length === 0) {
-    await replyText(token, '此類別目前無可預約服務，請選擇其他類別。')
-    await handleStart(token, lineUserId)
+    await replyQuickReply(token, '此類別目前無可預約服務，請選擇其他類別：', [
+      { label: '身體按摩', text: '身體按摩' },
+      { label: '臉部護理', text: '臉部護理' },
+      { label: '特別療癒套組', text: '特別療癒套組' },
+    ])
     return
   }
   await saveSession(lineUserId, 'SELECT_SERVICE', { ...data, category: text })
