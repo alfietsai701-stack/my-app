@@ -1,18 +1,18 @@
-import { Calendar, Users, TrendingUp, Package } from 'lucide-react'
+import { Calendar, Users, TrendingUp, Package, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 
-const statusConfig: Record<string, { label: string; style: string }> = {
-  confirmed: { label: '已確認', style: 'text-[var(--t-accent)] border border-[var(--t-accent-bg)]' },
-  completed: { label: '已完成', style: 'text-[#6B9E78] border border-[rgba(107,158,120,0.2)]' },
-  cancelled:  { label: '已取消', style: 'text-[#A06060] border border-[rgba(160,96,96,0.2)]' },
+const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
+  confirmed: { label: '已確認', color: '#1255CC', bg: 'rgba(18,85,204,0.08)' },
+  completed: { label: '已完成', color: '#059669', bg: 'rgba(5,150,105,0.08)' },
+  cancelled:  { label: '已取消', color: '#DC2626', bg: 'rgba(220,38,38,0.08)' },
 }
 
 function pctLabel(curr: number, prev: number) {
   if (prev === 0) return curr > 0 ? '本月開始累積' : '尚無資料'
   const p = Math.round(((curr - prev) / prev) * 100)
   if (p === 0) return '與上月持平'
-  return p > 0 ? `較上月 +${p}%` : `較上月 ${p}%`
+  return p > 0 ? `↑ 較上月 +${p}%` : `↓ 較上月 ${p}%`
 }
 
 export default async function DashboardPage() {
@@ -39,7 +39,7 @@ export default async function DashboardPage() {
     prisma.appointment.findMany({
       where: { scheduledAt: { gte: new Date(now.setHours(0,0,0,0)) } },
       orderBy: { scheduledAt: 'asc' },
-      take: 5,
+      take: 6,
       include: {
         customer: { select: { name: true } },
         service:  { select: { name: true } },
@@ -56,25 +56,39 @@ export default async function DashboardPage() {
       label: '本月收入',
       value: revenueThis > 0 ? `NT$ ${revenueThis.toLocaleString()}` : '—',
       sub: pctLabel(revenueThis, revenueLast),
-      icon: TrendingUp, accent: true, href: '/reports',
+      icon: TrendingUp,
+      iconColor: '#1255CC',
+      iconBg: 'rgba(18,85,204,0.10)',
+      href: '/reports',
+      highlight: true,
     },
     {
       label: '本月預約',
       value: apptCountThis > 0 ? `${apptCountThis} 筆` : '—',
       sub: apptCountThis > 0 ? `已完成 ${apptCountCompleted} 筆` : pctLabel(apptCountThis, apptCountLast),
-      icon: Calendar, href: '/appointments',
+      icon: Calendar,
+      iconColor: '#7C3AED',
+      iconBg: 'rgba(124,58,237,0.10)',
+      href: '/appointments',
     },
     {
       label: '顧客總數',
       value: customerCount > 0 ? `${customerCount} 位` : '—',
       sub: newCustomerCount > 0 ? `本月新增 ${newCustomerCount} 位` : '本月無新增',
-      icon: Users, href: '/customers',
+      icon: Users,
+      iconColor: '#059669',
+      iconBg: 'rgba(5,150,105,0.10)',
+      href: '/customers',
     },
     {
       label: '低庫存品項',
       value: `${lowStockCount} 項`,
-      sub: lowStockCount > 0 ? '需補貨' : '庫存充足',
-      icon: Package, warn: lowStockCount > 0, href: '/inventory',
+      sub: lowStockCount > 0 ? '⚠ 需要補貨' : '庫存充足',
+      icon: Package,
+      iconColor: lowStockCount > 0 ? '#DC2626' : '#D97706',
+      iconBg: lowStockCount > 0 ? 'rgba(220,38,38,0.10)' : 'rgba(217,119,6,0.10)',
+      href: '/inventory',
+      warn: lowStockCount > 0,
     },
   ]
 
@@ -83,79 +97,122 @@ export default async function DashboardPage() {
     const today = new Date(); today.setHours(0,0,0,0)
     const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
     const apptDay = new Date(d); apptDay.setHours(0,0,0,0)
-    const prefix = apptDay.getTime() === today.getTime() ? '今日' : apptDay.getTime() === tomorrow.getTime() ? '明日' : d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
+    const prefix = apptDay.getTime() === today.getTime()
+      ? '今日' : apptDay.getTime() === tomorrow.getTime()
+      ? '明日' : d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
     return `${prefix} ${fmtTime(d)}`
   }
 
+  const monthLabel = `${now.getFullYear()} 年 ${now.getMonth() + 1} 月`
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
-      <header className="h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-center justify-between px-4 lg:px-8 shrink-0">
-        <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-3)] uppercase">總覽</p>
-        <Link href="/appointments"
-          className="border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">
-          新增預約
-        </Link>
-      </header>
+      {/* ── Header ── */}
+      <div className="shrink-0 px-5 lg:px-8 py-5 lg:py-6" style={{ background: 'var(--t-surface)', borderBottom: '1px solid var(--t-border)' }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-lg font-bold" style={{ color: 'var(--t-text)' }}>總覽</h1>
+            <p className="text-sm mt-0.5" style={{ color: 'var(--t-text-4)' }}>{monthLabel}</p>
+          </div>
+          <Link href="/appointments"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
+            style={{ background: 'var(--t-accent)', color: 'var(--t-accent-fg)' }}>
+            + 新增預約
+          </Link>
+        </div>
+      </div>
 
-      <main className="flex-1 bg-[var(--t-bg)] p-4 lg:p-8 overflow-auto">
-        {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-5 mb-8 lg:mb-10">
-          {statsCards.map(({ label, value, sub, icon: Icon, accent, warn, href }) => (
+      <main className="flex-1 overflow-auto px-5 lg:px-8 py-5 lg:py-6" style={{ background: 'var(--t-bg)' }}>
+
+        {/* ── Stats grid ── */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {statsCards.map(({ label, value, sub, icon: Icon, iconColor, iconBg, href, highlight, warn }) => (
             <Link key={label} href={href}
-              className="bg-[var(--t-surface)] border border-[var(--t-border)] p-5 lg:p-6 hover:border-[var(--t-border-s)] transition-colors block">
-              <div className="flex items-start justify-between mb-4 lg:mb-5">
-                <p className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase leading-relaxed">{label}</p>
-                <Icon size={13} strokeWidth={1.5} className={warn ? 'text-[#A06060]' : 'text-[var(--t-accent)]'} />
+              className="rounded-2xl p-5 block transition-all hover:scale-[1.01]"
+              style={{ background: 'var(--t-surface)', boxShadow: 'var(--t-shadow)' }}>
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                  style={{ background: iconBg }}>
+                  <Icon size={18} strokeWidth={2} style={{ color: iconColor }} />
+                </div>
+                <ChevronRight size={14} strokeWidth={2} style={{ color: 'var(--t-text-4)' }} />
               </div>
-              <p className={`text-[1.4rem] lg:text-[1.6rem] font-extralight tracking-tight leading-none mb-2 ${
-                warn ? 'text-[#A06060]' : accent ? 'text-[var(--t-accent)]' : 'text-[var(--t-text)]'
-              }`}>
+              <p className="text-2xl font-bold mb-1" style={{
+                color: warn ? '#DC2626' : highlight ? 'var(--t-accent)' : 'var(--t-text)',
+              }}>
                 {value}
               </p>
-              <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">{sub}</p>
+              <p className="text-xs" style={{ color: 'var(--t-text-4)' }}>{label}</p>
+              <p className="text-[11px] mt-1 font-medium" style={{
+                color: warn ? '#DC2626' : sub.startsWith('↑') ? '#059669' : sub.startsWith('↓') ? '#DC2626' : 'var(--t-text-3)',
+              }}>
+                {sub}
+              </p>
             </Link>
           ))}
         </div>
 
-        {/* Recent appointments */}
-        <div className="bg-[var(--t-surface)] border border-[var(--t-border)] overflow-hidden">
-          <div className="px-4 lg:px-8 py-4 lg:py-5 border-b border-[var(--t-border)] flex items-center justify-between">
-            <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-2)] uppercase">近期預約</p>
-            <Link href="/appointments" className="text-[10px] text-[var(--t-text-4)] hover:text-[var(--t-accent)] tracking-wide transition-colors">
-              查看全部
+        {/* ── Upcoming appointments ── */}
+        <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--t-surface)', boxShadow: 'var(--t-shadow)' }}>
+          <div className="px-5 lg:px-6 py-4 flex items-center justify-between"
+            style={{ borderBottom: '1px solid var(--t-border)' }}>
+            <div>
+              <h2 className="text-sm font-semibold" style={{ color: 'var(--t-text)' }}>今日以後預約</h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--t-text-4)' }}>最近 6 筆</p>
+            </div>
+            <Link href="/appointments"
+              className="text-xs font-medium flex items-center gap-1 transition-colors"
+              style={{ color: 'var(--t-accent)' }}>
+              查看全部 <ChevronRight size={13} strokeWidth={2} />
             </Link>
           </div>
 
           {recentAppts.length === 0 ? (
-            <div className="px-8 py-10 text-center">
-              <p className="text-xs text-[var(--t-text-3)] tracking-widest mb-1">尚無預約</p>
-              <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">點擊「新增預約」建立第一筆</p>
+            <div className="px-6 py-12 text-center">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
+                style={{ background: 'var(--t-elevated)' }}>
+                <Calendar size={22} strokeWidth={1.5} style={{ color: 'var(--t-text-4)' }} />
+              </div>
+              <p className="text-sm font-medium" style={{ color: 'var(--t-text-3)' }}>尚無預約</p>
+              <p className="text-xs mt-1" style={{ color: 'var(--t-text-4)' }}>點擊「新增預約」建立第一筆</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[480px]">
-                <thead>
-                  <tr className="border-b border-[var(--t-border)]">
-                    {['顧客', '服務', '時間', '狀態'].map((h) => (
-                      <th key={h} className="text-left text-[10px] font-normal text-[var(--t-text-4)] tracking-[0.25em] uppercase px-4 lg:px-8 py-3">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {recentAppts.map((appt) => (
-                    <tr key={appt.id} className="border-b border-[var(--t-border)] last:border-0 hover:bg-[var(--t-bg)] transition-colors">
-                      <td className="text-sm font-light text-[var(--t-text)] px-4 lg:px-8 py-4 tracking-wide">{appt.customer.name}</td>
-                      <td className="text-xs text-[var(--t-text-2)] px-4 lg:px-8 py-4 tracking-wide">{appt.service.name}</td>
-                      <td className="text-xs text-[var(--t-text-3)] px-4 lg:px-8 py-4 tracking-wide tabular-nums">{fmtDateLabel(appt.scheduledAt)}</td>
-                      <td className="px-4 lg:px-8 py-4">
-                        <span className={`px-3 py-1 text-[10px] tracking-[0.15em] ${statusConfig[appt.status]?.style ?? ''}`}>
-                          {statusConfig[appt.status]?.label ?? appt.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="divide-y" style={{ borderColor: 'var(--t-border)' }}>
+              {recentAppts.map((appt) => {
+                const cfg = statusConfig[appt.status] ?? statusConfig.confirmed
+                return (
+                  <div key={appt.id} className="flex items-center gap-4 px-5 lg:px-6 py-4 hover:bg-[var(--t-elevated)] transition-colors">
+                    {/* Time block */}
+                    <div className="w-14 shrink-0 text-center">
+                      <p className="text-sm font-bold tabular-nums" style={{ color: 'var(--t-text)' }}>
+                        {fmtTime(appt.scheduledAt)}
+                      </p>
+                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--t-text-4)' }}>
+                        {fmtDateLabel(appt.scheduledAt).split(' ')[0]}
+                      </p>
+                    </div>
+
+                    {/* Divider */}
+                    <div className="w-px h-8 shrink-0" style={{ background: 'var(--t-border)' }} />
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--t-text)' }}>
+                        {appt.customer.name}
+                      </p>
+                      <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--t-text-3)' }}>
+                        {appt.service.name}
+                      </p>
+                    </div>
+
+                    {/* Status badge */}
+                    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0"
+                      style={{ color: cfg.color, background: cfg.bg }}>
+                      {cfg.label}
+                    </span>
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
