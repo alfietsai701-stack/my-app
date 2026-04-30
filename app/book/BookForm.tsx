@@ -335,8 +335,8 @@ export default function BookForm({ businessName }: { businessName: string }) {
               <div>
                 <SectionTitle icon={<Check size={16} />} title="確認預約資料" />
                 <div style={{ background: 'var(--t-elevated)', borderRadius: 14, padding: '4px 16px', marginBottom: 20 }}>
-                  {[
-                    ['服務', selectedService?.name],
+                  {([
+                    ['服務', selectedService?.name ?? ''],
                     ['費用', selectedService ? `NT$ ${selectedService.price.toLocaleString()}` : ''],
                     ['時長', selectedService ? `${selectedService.durationMin} 分鐘` : ''],
                     ['日期', formatDate(form.date)],
@@ -344,11 +344,11 @@ export default function BookForm({ businessName }: { businessName: string }) {
                     ['姓名', form.name],
                     ['電話', form.phone],
                     ['Email', form.email || '（未填寫）'],
-                    form.note ? ['備註', form.note] : null,
-                  ].filter(Boolean).map(([label, value]) => (
-                    <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--t-border)' }}>
+                    ...(form.note ? [['備註', form.note]] : []),
+                  ] as [string, string][]).map(([label, value]) => (
+                    <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--t-border)' }}>
                       <span style={{ color: 'var(--t-text-3)', fontSize: 14, flexShrink: 0, marginRight: 12 }}>{label}</span>
-                      <span style={{ color: 'var(--t-text)', fontWeight: 600, fontSize: 14, textAlign: 'right', wordBreak: 'break-all' }}>{value as string}</span>
+                      <span style={{ color: 'var(--t-text)', fontWeight: 600, fontSize: 14, textAlign: 'right', wordBreak: 'break-all' }}>{value}</span>
                     </div>
                   ))}
                 </div>
