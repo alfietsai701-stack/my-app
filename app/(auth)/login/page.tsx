@@ -47,13 +47,13 @@ export default function LoginPage() {
 
         <div className="relative z-10 text-center text-white px-12 max-w-sm">
           {/* Logo */}
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl font-bold mx-auto mb-8"
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-8"
             style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)' }}>
-            A
+            ✦
           </div>
-          <h1 className="text-3xl font-bold tracking-tight mb-3">Ada 慢療室</h1>
+          <h1 className="text-3xl font-bold tracking-tight mb-3">美業管理後台</h1>
           <p className="text-base font-light opacity-75 leading-relaxed">
-            以溫柔的節奏<br />守護每一位到來的人
+            預約・顧客・庫存・報表<br />一站式門市管理解決方案
           </p>
 
           {/* Feature pills */}
@@ -74,12 +74,12 @@ export default function LoginPage() {
 
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-10">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl font-bold text-white mx-auto mb-4"
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl text-white mx-auto mb-4"
               style={{ background: 'linear-gradient(135deg, #1255CC, #0A42A8)' }}>
-              A
+              ✦
             </div>
-            <h1 className="text-xl font-bold" style={{ color: '#0F1E38' }}>Ada 慢療室</h1>
-            <p className="text-sm mt-1" style={{ color: '#9AADC8' }}>管理後台</p>
+            <h1 className="text-xl font-bold" style={{ color: '#0F1E38' }}>美業管理後台</h1>
+            <p className="text-sm mt-1" style={{ color: '#9AADC8' }}>後台管理系統</p>
           </div>
 
           {/* Card */}
@@ -181,7 +181,7 @@ export default function LoginPage() {
           </div>
 
           <p className="text-center text-[11px] mt-6" style={{ color: '#9AADC8' }}>
-            Ada Studio © 2026 · 僅供授權人員使用
+            美業管理系統 © 2026 · 僅供授權人員使用
           </p>
         </div>
       </div>

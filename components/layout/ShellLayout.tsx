@@ -43,13 +43,13 @@ export default function ShellLayout({
             boxShadow: 'var(--t-shadow)',
           }}>
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white font-bold text-sm"
-              style={{ background: 'var(--t-accent)' }}>
-              A
+            <div className="w-8 h-8 rounded-xl flex items-center justify-center text-white"
+              style={{ background: 'var(--t-accent)', fontSize: 14 }}>
+              ✦
             </div>
-            <span className="text-sm font-semibold" style={{ color: 'var(--t-text)' }}>Ada 慢療室</span>
+            <span className="text-sm font-semibold" style={{ color: 'var(--t-text)' }}>美業管理後台</span>
           </div>
-          <span className="text-xs font-medium" style={{ color: 'var(--t-text-4)' }}>管理後台</span>
+          <span className="text-xs font-medium" style={{ color: 'var(--t-text-4)' }}>後台管理系統</span>
         </div>
 
         {/* Page content — extra bottom padding on mobile for tab bar */}

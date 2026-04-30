@@ -66,13 +66,13 @@ export default function Sidebar({
         {/* Brand */}
         <div className="px-5 pt-6 pb-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white font-bold text-sm shrink-0"
-              style={{ background: 'var(--t-accent)' }}>
-              A
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0"
+              style={{ background: 'var(--t-accent)', fontSize: 16 }}>
+              ✦
             </div>
             <div>
-              <p className="text-sm font-semibold" style={{ color: 'var(--t-text)' }}>Ada 慢療室</p>
-              <p className="text-[11px]" style={{ color: 'var(--t-text-4)' }}>管理後台</p>
+              <p className="text-sm font-semibold" style={{ color: 'var(--t-text)' }}>美業管理後台</p>
+              <p className="text-[11px]" style={{ color: 'var(--t-text-4)' }}>後台管理系統</p>
             </div>
           </div>
         </div>

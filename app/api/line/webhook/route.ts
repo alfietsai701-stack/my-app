@@ -8,6 +8,10 @@ export const maxDuration = 30
 
 const BASE_URL = process.env.NEXTAUTH_URL?.replace('http://localhost:3000', 'https://my-app-taupe-three-92.vercel.app') ?? 'https://my-app-taupe-three-92.vercel.app'
 
+// 店家資訊從環境變數讀取，方便多店部署
+const BUSINESS_NAME  = process.env.LINE_BUSINESS_NAME  ?? '預約服務'
+const SOCIAL_URL     = process.env.LINE_SOCIAL_URL     ?? ''
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type Step = 'START' | 'SELECT_CATEGORY' | 'SELECT_SERVICE' | 'SELECT_DATE' | 'SELECT_TIME' | 'ASK_NAME' | 'ASK_PHONE' | 'ASK_NOTE' | 'CONFIRM'
@@ -104,7 +108,7 @@ async function handleStart(token: string, lineUserId: string) {
   // saveSession upserts — no need to delete first; warm service cache in parallel
   await Promise.all([
     saveSession(lineUserId, 'SELECT_CATEGORY', {}),
-    replyQuickReply(token, '您好！歡迎預約 Ada 慢療室 🌿\n請選擇服務類別：', [
+    replyQuickReply(token, `您好！歡迎預約 ${BUSINESS_NAME} 🌸\n請選擇服務類別：`, [
       { label: '身體按摩', text: '身體按摩' },
       { label: '臉部護理', text: '臉部護理' },
       { label: '特別療癒套組', text: '特別療癒套組' },
@@ -305,7 +309,10 @@ async function handlePromotion(token: string) {
 }
 
 async function handleLinks(token: string) {
-  await replyText(token, '🔗 Ada 慢療室 官方連結\n\n📸 Instagram\nhttps://www.instagram.com/ada_studio_2026/')
+  const body = SOCIAL_URL
+    ? `🔗 ${BUSINESS_NAME} 官方連結\n\n📸 社群媒體\n${SOCIAL_URL}`
+    : `🔗 ${BUSINESS_NAME} 官方連結\n\n目前尚未設定社群連結。`
+  await replyText(token, body)
 }
 
 const MENU_KEYWORDS: Record<string, (token: string, lineUserId: string) => Promise<void>> = {

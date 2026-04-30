@@ -5,8 +5,8 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
-  title: "Ada 慢療室",
-  description: "管理後台",
+  title: "美業管理後台",
+  description: "美業後台管理系統",
 };
 
 export default function RootLayout({
