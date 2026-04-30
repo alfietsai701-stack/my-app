@@ -12,6 +12,8 @@ model Customer {
   id           String        @id @default(cuid())
   name         String
   phone        String        @unique
+  email        String?
+  lineUserId   String?       @unique
   birthday     DateTime?
   note         String?
   createdAt    DateTime      @default(now())

@@ -16,6 +16,10 @@ async function lineReply(body: object): Promise<void> {
   })
 }
 
+export async function replyMessages(replyToken: string, messages: object[]): Promise<void> {
+  await lineReply({ replyToken, messages })
+}
+
 export async function sendLineMessage(message: string): Promise<void> {
   const token    = process.env.LINE_CHANNEL_ACCESS_TOKEN
   const targetId = process.env.LINE_TARGET_ID
@@ -27,6 +31,16 @@ export async function sendLineMessage(message: string): Promise<void> {
     body: JSON.stringify({ to: targetId, messages: [{ type: 'text', text: message }] }),
   })
   if (!res.ok) throw new Error(`LINE 推播失敗：${res.status} ${await res.text()}`)
+}
+
+export async function sendLineToUser(userId: string, message: string): Promise<void> {
+  const token = process.env.LINE_CHANNEL_ACCESS_TOKEN
+  if (!token) return
+  await fetch(LINE_PUSH_API, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ to: userId, messages: [{ type: 'text', text: message }] }),
+  })
 }
 
 export async function replyText(replyToken: string, text: string): Promise<void> {
