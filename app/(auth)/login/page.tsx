@@ -1,11 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Eye, EyeOff, LogIn } from 'lucide-react'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
@@ -23,7 +21,7 @@ export default function LoginPage() {
     })
     setLoading(false)
     if (res.ok) {
-      router.push('/')
+      window.location.href = '/'
     } else {
       const data = await res.json()
       setError(data.error ?? '帳號或密碼錯誤')
