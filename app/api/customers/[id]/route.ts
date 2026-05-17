@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { serializeCustomer, serializeCustomerDetail } from '@/lib/customer-serializers'
 
 export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -14,7 +15,7 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
     },
   })
   if (!customer) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  return NextResponse.json(customer)
+  return NextResponse.json(serializeCustomerDetail(customer))
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -25,7 +26,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     data: { name, phone, birthday: birthday ? new Date(birthday) : null, note: note || null },
     include: { _count: { select: { appointments: true } } },
   })
-  return NextResponse.json(customer)
+  return NextResponse.json(serializeCustomer(customer))
 }
 
 export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {

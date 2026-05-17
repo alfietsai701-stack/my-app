@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { serializeCustomer } from '@/lib/customer-serializers'
 
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q') ?? ''
@@ -11,7 +12,7 @@ export async function GET(req: NextRequest) {
     orderBy: { createdAt: 'desc' },
     include: { _count: { select: { appointments: true } } },
   })
-  return NextResponse.json(customers)
+  return NextResponse.json(customers.map(serializeCustomer))
 }
 
 export async function POST(req: NextRequest) {
@@ -20,5 +21,5 @@ export async function POST(req: NextRequest) {
     data: { name, phone, birthday: birthday ? new Date(birthday) : null, note: note || null },
     include: { _count: { select: { appointments: true } } },
   })
-  return NextResponse.json(customer, { status: 201 })
+  return NextResponse.json(serializeCustomer(customer), { status: 201 })
 }
