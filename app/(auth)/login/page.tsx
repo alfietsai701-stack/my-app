@@ -49,9 +49,6 @@ export default function LoginPage() {
             <h1 className="text-4xl font-semibold leading-tight tracking-normal" style={{ color: '#33281E' }}>
               安靜、清楚、適合日常管理的後台。
             </h1>
-            <p className="mt-5 text-sm leading-7" style={{ color: '#76685B' }}>
-              集中處理預約、顧客、服務與營運數據。介面保留必要資訊密度，視覺更像精品沙龍內部工具。
-            </p>
           </div>
 
           <div className="mt-12 grid max-w-md grid-cols-2 gap-px border" style={{ borderColor: '#E4D3BE', background: '#E4D3BE' }}>
@@ -89,7 +86,7 @@ export default function LoginPage() {
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
                   <label className="mb-2 block text-xs font-semibold" style={{ color: '#5E4C3D' }}>
-                    電子信箱
+                    帳號
                   </label>
                   <input
                     type="email"
