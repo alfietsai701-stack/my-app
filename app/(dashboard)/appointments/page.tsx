@@ -34,7 +34,9 @@ export default async function AppointmentsPage() {
     getBusinessSlots(),
   ])
 
-  const initialMonthData = Object.fromEntries(apptsByMonth.map(({ m, data }) => [m, data]))
+  const initialMonthData = Object.fromEntries(
+    apptsByMonth.map(({ m, data }) => [m, JSON.parse(JSON.stringify(data))])
+  )
 
   return (
     <AppointmentsClient

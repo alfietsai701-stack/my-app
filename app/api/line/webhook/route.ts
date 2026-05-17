@@ -21,8 +21,7 @@ function verifySignature(body: string, signature: string): boolean {
 // ── Menu handlers ─────────────────────────────────────────────────────────────
 
 async function handleBooking(token: string) {
-  const liffId     = process.env.NEXT_PUBLIC_LIFF_ID
-  const bookingUrl = liffId ? `https://liff.line.me/${liffId}` : `${BASE_URL}/book`
+  const bookingUrl = `${BASE_URL}/book`
 
   await replyMessages(token, [{
     type: 'template',

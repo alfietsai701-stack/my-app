@@ -79,7 +79,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
       try {
         const liff = (await import('@line/liff')).default
         await liff.init({ liffId })
-        if (!liff.isLoggedIn()) { liff.login(); return }
+        if (!liff.isLoggedIn()) return
         const profile = await liff.getProfile()
         setLineUserId(profile.userId)
         setForm(prev => ({ ...prev, name: prev.name || profile.displayName || '' }))
