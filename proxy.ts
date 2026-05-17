@@ -9,6 +9,7 @@ export async function proxy(request: NextRequest) {
   if (
     pathname.startsWith('/login') ||
     pathname.startsWith('/book') ||
+    pathname.startsWith('/ui-preview') ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/book') ||
     pathname.startsWith('/api/line') ||
