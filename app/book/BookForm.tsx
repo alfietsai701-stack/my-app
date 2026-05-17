@@ -3,24 +3,24 @@
 import { useState, useEffect, useCallback } from 'react'
 import { ChevronLeft, Check, Calendar, Clock, User, Loader2, CheckCircle2 } from 'lucide-react'
 
-// ── 預約頁專屬色盤（溫暖米白 + 鼠尾草綠） ──────────────────────────────────
+// ── 預約頁專屬色盤（靜奢奶油風） ──────────────────────────────────
 const C = {
-  bg:        '#F6F1EB',
-  surface:   '#FFFFFF',
-  elevated:  '#F2EDE7',
-  border:    '#E4D9CE',
-  accent:    '#7B9E87',
-  accentH:   '#628B72',
-  accentBg:  'rgba(123,158,135,0.10)',
-  text:      '#2C2018',
-  text2:     '#5C4A3C',
-  text3:     '#8C7A6C',
-  text4:     '#B8A898',
-  warning:   '#C07820',
-  danger:    '#C24040',
-  dangerBg:  'rgba(194,64,64,0.08)',
-  shadow:    '0 4px 20px rgba(44,32,24,0.10), 0 1px 4px rgba(44,32,24,0.06)',
-  headerGrad:'linear-gradient(145deg,#8FAF9A,#4D7A62)',
+  bg:        '#F8F1E6',
+  surface:   '#FFFDFC',
+  elevated:  '#FAF4EA',
+  border:    '#E4D3BE',
+  accent:    '#B99868',
+  accentH:   '#9B744A',
+  accentBg:  'rgba(185,152,104,0.14)',
+  text:      '#33281E',
+  text2:     '#5E4C3D',
+  text3:     '#76685B',
+  text4:     '#9A8A7B',
+  warning:   '#B8842B',
+  danger:    '#B85C50',
+  dangerBg:  'rgba(184,92,80,0.10)',
+  shadow:    '0 4px 20px rgba(51,40,30,0.12), 0 1px 4px rgba(51,40,30,0.06)',
+  headerGrad:'linear-gradient(145deg,#3B2D22 0%,#7E6047 62%,#B99868 100%)',
 }
 
 type Service = { id: string; name: string; price: number; durationMin: number; category: string }

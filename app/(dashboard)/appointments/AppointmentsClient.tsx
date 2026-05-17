@@ -12,8 +12,8 @@ type Appt = {
 }
 
 const STATUS = {
-  confirmed: { label: '已確認', color: '#1255CC', bg: 'rgba(18,85,204,0.10)', border: 'rgba(18,85,204,0.30)' },
-  completed: { label: '已完成', color: '#059669', bg: 'rgba(5,150,105,0.10)',  border: 'rgba(5,150,105,0.30)'  },
+  confirmed: { label: '已確認', color: '#B99868', bg: 'rgba(185,152,104,0.14)', border: 'rgba(185,152,104,0.34)' },
+  completed: { label: '已完成', color: '#6F8F74', bg: 'rgba(111,143,116,0.12)', border: 'rgba(111,143,116,0.32)' },
   cancelled:  { label: '已取消', color: '#9CA3AF', bg: 'rgba(156,163,175,0.08)', border: 'rgba(156,163,175,0.25)' },
 }
 const PAY_METHODS = ['現金', '信用卡', 'Line Pay', '轉帳']
@@ -227,7 +227,7 @@ export default function AppointmentsClient({
         {!blocked && cellAppts.length === 0 && (
           <button onClick={() => openAdd(ds, slot)}
             className="absolute inset-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center"
-            style={{ border: '1.5px dashed rgba(18,85,204,0.25)', background: 'rgba(18,85,204,0.04)' }}>
+            style={{ border: '1.5px dashed rgba(185,152,104,0.30)', background: 'rgba(185,152,104,0.08)' }}>
             <Plus size={13} strokeWidth={2.5} style={{ color: 'var(--t-accent)' }} />
           </button>
         )}
@@ -319,7 +319,7 @@ export default function AppointmentsClient({
                     const cnt = (byDate[ds]??[]).filter(a=>a.status!=='cancelled').length
                     return (
                       <div key={ds} className="flex flex-col items-center py-2.5 border-r last:border-r-0"
-                        style={{ borderColor:'var(--t-border)', background: isToday?'rgba(18,85,204,0.03)':'' }}>
+                        style={{ borderColor:'var(--t-border)', background: isToday?'rgba(185,152,104,0.08)':'' }}>
                         <span className="text-[11px] mb-1" style={{ color: day.getDay()===0?'#DC2626':'var(--t-text-4)' }}>
                           {WEEKDAY_LABELS[day.getDay()]}
                         </span>
@@ -331,7 +331,7 @@ export default function AppointmentsClient({
                         </span>
                         {cnt > 0 && (
                           <span className="mt-1 text-[10px] font-medium px-1.5 rounded-full"
-                            style={{ background:'rgba(18,85,204,0.10)', color:'var(--t-accent)' }}>{cnt}</span>
+                            style={{ background:'rgba(185,152,104,0.14)', color:'var(--t-accent)' }}>{cnt}</span>
                         )}
                       </div>
                     )
@@ -352,7 +352,7 @@ export default function AppointmentsClient({
                       const blocked  = calcBlocked(dayAppts, slots).has(slot)
                       return (
                         <div key={ds} className="border-r last:border-r-0"
-                          style={{ borderColor:'var(--t-border)', background: blocked?'rgba(0,0,0,0.02)': toDateStr(day)===today?'rgba(18,85,204,0.02)':'' }}>
+                          style={{ borderColor:'var(--t-border)', background: blocked?'rgba(0,0,0,0.02)': toDateStr(day)===today?'rgba(185,152,104,0.06)':'' }}>
                           <CellSlot ds={ds} slot={slot} dayAppts={dayAppts} blocked={blocked}/>
                         </div>
                       )
@@ -457,7 +457,7 @@ export default function AppointmentsClient({
                     <div key={i} onClick={() => { setDate(ds); setView('day') }}
                       className="rounded-xl p-2 cursor-pointer transition-all hover:scale-[1.015]"
                       style={{ background:'var(--t-surface)', boxShadow:'var(--t-shadow)', minHeight:80, opacity: isThisMonth?1:0.3,
-                        border: ds===date?'1.5px solid rgba(18,85,204,0.35)':'1.5px solid transparent' }}>
+                        border: ds===date?'1.5px solid rgba(185,152,104,0.36)':'1.5px solid transparent' }}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold"
                           style={isToday?{ background:'var(--t-accent)', color:'#fff' }:{ color: d.getDay()===0?'#DC2626':'var(--t-text-3)' }}>
@@ -465,7 +465,7 @@ export default function AppointmentsClient({
                         </span>
                         {activeCount>0 && (
                           <span className="text-[9px] font-semibold px-1 rounded-full"
-                            style={{ background:'rgba(18,85,204,0.10)', color:'var(--t-accent)' }}>{activeCount}</span>
+                            style={{ background:'rgba(185,152,104,0.14)', color:'var(--t-accent)' }}>{activeCount}</span>
                         )}
                       </div>
                       <div className="space-y-0.5">
@@ -587,7 +587,7 @@ export default function AppointmentsClient({
                 <label className="block text-xs font-semibold mb-2" style={{ color:'var(--t-text-3)' }}>顧客</label>
                 {selectedCustomer ? (
                   <div className="flex items-center justify-between rounded-xl px-4 py-3"
-                    style={{ background:'rgba(18,85,204,0.06)', border:'1.5px solid rgba(18,85,204,0.20)' }}>
+                    style={{ background:'rgba(185,152,104,0.10)', border:'1.5px solid rgba(185,152,104,0.24)' }}>
                     <div>
                       <p className="text-sm font-semibold" style={{ color:'var(--t-text)' }}>{selectedCustomer.name}</p>
                       <p className="text-xs" style={{ color:'var(--t-text-4)' }}>{selectedCustomer.phone}</p>

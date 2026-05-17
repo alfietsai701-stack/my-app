@@ -29,24 +29,19 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex" style={{ background: '#EFF3FA' }}>
+    <div className="min-h-screen flex" style={{ background: '#F8F1E6' }}>
 
-      {/* ── Left: Blue brand panel (desktop only) ── */}
+      {/* ── Left: Brand panel (desktop only) ── */}
       <div className="hidden lg:flex w-5/12 flex-col items-center justify-center relative overflow-hidden"
-        style={{ background: 'linear-gradient(145deg, #1255CC 0%, #0A42A8 60%, #082E80 100%)' }}>
+        style={{ background: 'linear-gradient(145deg, #3B2D22 0%, #7E6047 62%, #B99868 100%)' }}>
 
-        {/* Decorative circles */}
-        <div className="absolute top-[-80px] right-[-80px] w-[320px] h-[320px] rounded-full opacity-10"
-          style={{ background: 'rgba(255,255,255,0.5)' }} />
-        <div className="absolute bottom-[-60px] left-[-60px] w-[240px] h-[240px] rounded-full opacity-10"
-          style={{ background: 'rgba(255,255,255,0.5)' }} />
-        <div className="absolute top-1/2 left-[-40px] w-[160px] h-[160px] rounded-full opacity-5"
-          style={{ background: 'rgba(255,255,255,0.8)' }} />
+        <div className="absolute inset-x-10 top-10 h-px" style={{ background: 'rgba(255,255,255,0.18)' }} />
+        <div className="absolute inset-x-10 bottom-10 h-px" style={{ background: 'rgba(255,255,255,0.14)' }} />
 
         <div className="relative z-10 text-center text-white px-12 max-w-sm">
           {/* Logo */}
           <div className="w-16 h-16 rounded-2xl flex items-center justify-center text-2xl mx-auto mb-8"
-            style={{ background: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)' }}>
+            style={{ background: 'rgba(255,255,255,0.13)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.22)' }}>
             ✦
           </div>
           <h1 className="text-3xl font-bold tracking-tight mb-3">美業管理後台</h1>
@@ -73,24 +68,24 @@ export default function LoginPage() {
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-10">
             <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-xl text-white mx-auto mb-4"
-              style={{ background: 'linear-gradient(135deg, #1255CC, #0A42A8)' }}>
+              style={{ background: 'linear-gradient(135deg, #B99868, #7E6047)' }}>
               ✦
             </div>
-            <h1 className="text-xl font-bold" style={{ color: '#0F1E38' }}>美業管理後台</h1>
-            <p className="text-sm mt-1" style={{ color: '#9AADC8' }}>後台管理系統</p>
+            <h1 className="text-xl font-bold" style={{ color: '#33281E' }}>美業管理後台</h1>
+            <p className="text-sm mt-1" style={{ color: '#9A8A7B' }}>後台管理系統</p>
           </div>
 
           {/* Card */}
-          <div className="rounded-2xl p-8" style={{ background: '#FFFFFF', boxShadow: '0 4px 24px rgba(15,30,56,0.10)' }}>
+          <div className="rounded-2xl p-8" style={{ background: '#FFFDFC', boxShadow: '0 4px 24px rgba(51,40,30,0.12)' }}>
             <div className="hidden lg:block mb-8">
-              <h2 className="text-xl font-bold" style={{ color: '#0F1E38' }}>歡迎回來</h2>
-              <p className="text-sm mt-1" style={{ color: '#9AADC8' }}>請登入您的管理帳號</p>
+              <h2 className="text-xl font-bold" style={{ color: '#33281E' }}>歡迎回來</h2>
+              <p className="text-sm mt-1" style={{ color: '#9A8A7B' }}>請登入您的管理帳號</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-5">
               {/* Email */}
               <div>
-                <label className="block text-xs font-semibold mb-2" style={{ color: '#334A6E' }}>
+                <label className="block text-xs font-semibold mb-2" style={{ color: '#5E4C3D' }}>
                   電子信箱
                 </label>
                 <input
@@ -101,24 +96,24 @@ export default function LoginPage() {
                   placeholder="your@email.com"
                   className="w-full px-4 py-3 rounded-xl text-sm outline-none transition-all"
                   style={{
-                    background: '#EFF3FA',
-                    border: '1.5px solid #E2E8F4',
-                    color: '#0F1E38',
+                    background: '#FAF4EA',
+                    border: '1.5px solid #E4D3BE',
+                    color: '#33281E',
                   }}
                   onFocus={e => {
-                    e.currentTarget.style.borderColor = '#1255CC'
-                    e.currentTarget.style.background = '#FFF'
+                    e.currentTarget.style.borderColor = '#B99868'
+                    e.currentTarget.style.background = '#FFFDFC'
                   }}
                   onBlur={e => {
-                    e.currentTarget.style.borderColor = '#E2E8F4'
-                    e.currentTarget.style.background = '#EFF3FA'
+                    e.currentTarget.style.borderColor = '#E4D3BE'
+                    e.currentTarget.style.background = '#FAF4EA'
                   }}
                 />
               </div>
 
               {/* Password */}
               <div>
-                <label className="block text-xs font-semibold mb-2" style={{ color: '#334A6E' }}>
+                <label className="block text-xs font-semibold mb-2" style={{ color: '#5E4C3D' }}>
                   密碼
                 </label>
                 <div className="relative">
@@ -130,24 +125,24 @@ export default function LoginPage() {
                     placeholder="••••••••"
                     className="w-full px-4 py-3 pr-12 rounded-xl text-sm outline-none transition-all"
                     style={{
-                      background: '#EFF3FA',
-                      border: '1.5px solid #E2E8F4',
-                      color: '#0F1E38',
+                      background: '#FAF4EA',
+                      border: '1.5px solid #E4D3BE',
+                      color: '#33281E',
                     }}
                     onFocus={e => {
-                      e.currentTarget.style.borderColor = '#1255CC'
-                      e.currentTarget.style.background = '#FFF'
+                      e.currentTarget.style.borderColor = '#B99868'
+                      e.currentTarget.style.background = '#FFFDFC'
                     }}
                     onBlur={e => {
-                      e.currentTarget.style.borderColor = '#E2E8F4'
-                      e.currentTarget.style.background = '#EFF3FA'
+                      e.currentTarget.style.borderColor = '#E4D3BE'
+                      e.currentTarget.style.background = '#FAF4EA'
                     }}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPw(v => !v)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-1"
-                    style={{ color: '#9AADC8' }}>
+                    style={{ color: '#9A8A7B' }}>
                     {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
@@ -156,7 +151,7 @@ export default function LoginPage() {
               {/* Error */}
               {error && (
                 <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-medium"
-                  style={{ background: 'rgba(220,38,38,0.07)', color: '#DC2626' }}>
+                  style={{ background: 'rgba(184,92,80,0.10)', color: '#B85C50' }}>
                   <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
                   {error}
                 </div>
@@ -167,7 +162,7 @@ export default function LoginPage() {
                 type="submit"
                 disabled={loading}
                 className="w-full py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-60 mt-2"
-                style={{ background: 'linear-gradient(135deg, #1255CC, #0A42A8)', color: '#FFFFFF' }}>
+                style={{ background: 'linear-gradient(135deg, #B99868, #7E6047)', color: '#FFFFFF' }}>
                 {loading ? (
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                 ) : (
@@ -178,7 +173,7 @@ export default function LoginPage() {
             </form>
           </div>
 
-          <p className="text-center text-[11px] mt-6" style={{ color: '#9AADC8' }}>
+          <p className="text-center text-[11px] mt-6" style={{ color: '#9A8A7B' }}>
             美業管理系統 © 2026 · 僅供授權人員使用
           </p>
         </div>

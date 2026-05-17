@@ -3,9 +3,9 @@ import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
 
 const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  confirmed: { label: '已確認', color: '#1255CC', bg: 'rgba(18,85,204,0.08)' },
-  completed: { label: '已完成', color: '#059669', bg: 'rgba(5,150,105,0.08)' },
-  cancelled:  { label: '已取消', color: '#DC2626', bg: 'rgba(220,38,38,0.08)' },
+  confirmed: { label: '已確認', color: '#B99868', bg: 'rgba(185,152,104,0.14)' },
+  completed: { label: '已完成', color: '#6F8F74', bg: 'rgba(111,143,116,0.12)' },
+  cancelled:  { label: '已取消', color: '#B85C50', bg: 'rgba(184,92,80,0.10)' },
 }
 
 function pctLabel(curr: number, prev: number) {
@@ -57,8 +57,8 @@ export default async function DashboardPage() {
       value: revenueThis > 0 ? `NT$ ${revenueThis.toLocaleString()}` : '—',
       sub: pctLabel(revenueThis, revenueLast),
       icon: TrendingUp,
-      iconColor: '#1255CC',
-      iconBg: 'rgba(18,85,204,0.10)',
+      iconColor: '#B99868',
+      iconBg: 'rgba(185,152,104,0.14)',
       href: '/reports',
       highlight: true,
     },
@@ -67,8 +67,8 @@ export default async function DashboardPage() {
       value: apptCountThis > 0 ? `${apptCountThis} 筆` : '—',
       sub: apptCountThis > 0 ? `已完成 ${apptCountCompleted} 筆` : pctLabel(apptCountThis, apptCountLast),
       icon: Calendar,
-      iconColor: '#7C3AED',
-      iconBg: 'rgba(124,58,237,0.10)',
+      iconColor: '#7E6047',
+      iconBg: 'rgba(126,96,71,0.12)',
       href: '/appointments',
     },
     {
@@ -76,8 +76,8 @@ export default async function DashboardPage() {
       value: customerCount > 0 ? `${customerCount} 位` : '—',
       sub: newCustomerCount > 0 ? `本月新增 ${newCustomerCount} 位` : '本月無新增',
       icon: Users,
-      iconColor: '#059669',
-      iconBg: 'rgba(5,150,105,0.10)',
+      iconColor: '#6F8F74',
+      iconBg: 'rgba(111,143,116,0.12)',
       href: '/customers',
     },
     {
@@ -85,8 +85,8 @@ export default async function DashboardPage() {
       value: `${lowStockCount} 項`,
       sub: lowStockCount > 0 ? '⚠ 需要補貨' : '庫存充足',
       icon: Package,
-      iconColor: lowStockCount > 0 ? '#DC2626' : '#D97706',
-      iconBg: lowStockCount > 0 ? 'rgba(220,38,38,0.10)' : 'rgba(217,119,6,0.10)',
+      iconColor: lowStockCount > 0 ? '#B85C50' : '#B8842B',
+      iconBg: lowStockCount > 0 ? 'rgba(184,92,80,0.10)' : 'rgba(184,132,43,0.12)',
       href: '/inventory',
       warn: lowStockCount > 0,
     },
