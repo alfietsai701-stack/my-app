@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { sendBookingEmail } from '@/lib/email'
 import { sendLineMessage, sendLineToUser } from '@/lib/line'
+import { getAvailableSlots } from '@/lib/slots'
 
 const BUSINESS_NAME = process.env.LINE_BUSINESS_NAME ?? '美業管理系統'
 
@@ -23,6 +24,11 @@ export async function POST(req: NextRequest) {
     select: { id: true, name: true, price: true, durationMin: true },
   })
   if (!service) return NextResponse.json({ error: '服務不存在' }, { status: 400 })
+
+  const availableSlots = await getAvailableSlots(date, service.durationMin)
+  if (!availableSlots.includes(time)) {
+    return NextResponse.json({ error: '此時段已被預約，請重新選擇其他時間' }, { status: 409 })
+  }
 
   const cleanPhone = phone.replace(/[-\s]/g, '')
 

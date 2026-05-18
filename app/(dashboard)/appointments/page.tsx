@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { getBusinessSlots } from '@/lib/slots'
+import { getServices } from '@/lib/service-data'
 import AppointmentsClient from './AppointmentsClient'
 
 export default async function AppointmentsPage() {
@@ -30,7 +31,7 @@ export default async function AppointmentsPage() {
       })
       return { m, data }
     })),
-    prisma.service.findMany({ orderBy: [{ category: 'asc' }, { price: 'asc' }] }),
+    getServices(),
     getBusinessSlots(),
   ])
 

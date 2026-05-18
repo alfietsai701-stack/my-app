@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   Calendar,
@@ -116,6 +116,8 @@ export default function BookForm({ businessName }: { businessName: string }) {
   const [done, setDone] = useState<{ code: string; service: string; date: string; time: string } | null>(null)
   const [error, setError] = useState('')
   const [lineUserId, setLineUserId] = useState('')
+  const slotCacheRef = useRef(new Map<string, string[]>())
+  const slotRequestRef = useRef(0)
 
   useEffect(() => {
     fetch('/api/book/services').then(r => r.json()).then((data: ServiceMap) => {
@@ -148,22 +150,36 @@ export default function BookForm({ businessName }: { businessName: string }) {
     }
     const svc = Object.values(services).flat().find(s => s.id === serviceId)
     if (!svc) return
+    const cacheKey = `${date}:${svc.durationMin}`
+    const cachedSlots = slotCacheRef.current.get(cacheKey)
+    if (cachedSlots) {
+      setSlots(cachedSlots)
+      setSlotsLoading(false)
+      return
+    }
+
+    const requestId = slotRequestRef.current + 1
+    slotRequestRef.current = requestId
     setSlots([])
     setSlotsLoading(true)
     try {
       const r = await fetch(`/api/book/slots?date=${date}&duration=${svc.durationMin}`)
-      setSlots(await r.json())
+      const data = await r.json()
+      if (slotRequestRef.current !== requestId) return
+      slotCacheRef.current.set(cacheKey, data)
+      setSlots(data)
     } catch {
-      setSlots([])
+      if (slotRequestRef.current === requestId) setSlots([])
     } finally {
-      setSlotsLoading(false)
+      if (slotRequestRef.current === requestId) setSlotsLoading(false)
     }
   }, [services])
 
-  const selectedService = Object.values(services).flat().find(s => s.id === form.serviceId)
+  const flatServices = useMemo(() => Object.values(services).flat(), [services])
+  const selectedService = flatServices.find(s => s.id === form.serviceId)
   const categories = Object.keys(services)
   const visibleServices = form.category ? services[form.category] ?? [] : []
-  const dates = quickDates()
+  const dates = useMemo(() => quickDates(), [])
   const step0Valid = !!form.serviceId
   const step1Valid = !!form.date && !!form.time && !isWeekend(form.date)
   const step2Valid = form.name.trim().length >= 2 && /^09\d{8}$/.test(form.phone.replace(/[-\s]/g, ''))

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth-server'
+import { getServices, revalidateServices } from '@/lib/service-data'
 
 export async function GET() {
-  const services = await prisma.service.findMany({ orderBy: [{ category: 'asc' }, { name: 'asc' }] })
+  const services = await getServices()
   return NextResponse.json(services)
 }
 
@@ -19,5 +20,6 @@ export async function POST(request: NextRequest) {
   const service = await prisma.service.create({
     data: { name, price: Number(price), durationMin: Number(durationMin), category },
   })
+  revalidateServices()
   return NextResponse.json(service, { status: 201 })
 }

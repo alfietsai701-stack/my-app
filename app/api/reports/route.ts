@@ -15,19 +15,20 @@ export async function GET(req: NextRequest) {
 
   const [
     receipts, prevReceipts,
-    appts, prevAppts,
+    apptCount, prevAppts, completedCount,
     allAppts,
   ] = await Promise.all([
     prisma.receipt.findMany({
       where: { paidAt: { gte: start, lte: end } },
       include: { appointment: { include: { service: true } } },
     }),
-    prisma.receipt.findMany({ where: { paidAt: { gte: prevStart, lte: prevEnd } } }),
-    prisma.appointment.findMany({
-      where: { scheduledAt: { gte: start, lte: end } },
-      include: { service: true },
+    prisma.receipt.aggregate({
+      where: { paidAt: { gte: prevStart, lte: prevEnd } },
+      _sum: { total: true },
     }),
+    prisma.appointment.count({ where: { scheduledAt: { gte: start, lte: end }, status: { not: 'cancelled' } } }),
     prisma.appointment.count({ where: { scheduledAt: { gte: prevStart, lte: prevEnd }, status: { not: 'cancelled' } } }),
+    prisma.appointment.count({ where: { scheduledAt: { gte: start, lte: end }, status: 'completed' } }),
     // full year for trend (last 12 months)
     prisma.receipt.findMany({
       where: { paidAt: { gte: new Date(y, m - 13, 1) } },
@@ -36,9 +37,7 @@ export async function GET(req: NextRequest) {
   ])
 
   const revenue = receipts.reduce((s, r) => s + r.total, 0)
-  const prevRevenue = prevReceipts.reduce((s, r) => s + r.total, 0)
-  const apptCount = appts.filter(a => a.status !== 'cancelled').length
-  const completedCount = appts.filter(a => a.status === 'completed').length
+  const prevRevenue = prevReceipts._sum.total ?? 0
   const avgTicket = completedCount > 0 ? Math.round(revenue / completedCount) : 0
 
   // Service breakdown

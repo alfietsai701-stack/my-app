@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getSession } from '@/lib/auth-server'
+import { revalidateServices } from '@/lib/service-data'
 
 async function requireServices() {
   const session = await getSession()
@@ -24,6 +25,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       ...(category && { category }),
     },
   })
+  revalidateServices()
   return NextResponse.json(service)
 }
 
@@ -33,5 +35,6 @@ export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params
   await prisma.service.delete({ where: { id } })
+  revalidateServices()
   return NextResponse.json({ ok: true })
 }

@@ -40,10 +40,19 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
+    const controller = new AbortController()
     setLoading(true)
-    fetch(`/api/reports?month=${toMonthStr(year, month)}`)
+    fetch(`/api/reports?month=${toMonthStr(year, month)}`, { signal: controller.signal })
       .then(r => r.ok ? r.json() : null)
-      .then(d => { setData(d); setLoading(false) })
+      .then(d => setData(d))
+      .catch(err => {
+        if (err.name !== 'AbortError') setData(null)
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false)
+      })
+
+    return () => controller.abort()
   }, [year, month])
 
   function shiftMonth(dir: 1 | -1) {
@@ -71,7 +80,7 @@ export default function ReportsPage() {
 
       <main className="flex-1 bg-[var(--t-bg)] p-4 lg:p-8 overflow-auto">
         {loading || !data ? (
-          <div className="flex items-center justify-center h-40 text-[10px] text-[var(--t-text-4)] tracking-widest">{loading ? '載入中' : '—'}</div>
+          <ReportSkeleton />
         ) : (
           <div className="space-y-6 lg:space-y-8">
 
@@ -195,6 +204,30 @@ export default function ReportsPage() {
           </div>
         )}
       </main>
+    </div>
+  )
+}
+
+function ReportSkeleton() {
+  return (
+    <div className="space-y-6 lg:space-y-8 animate-pulse">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-5">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="bg-[var(--t-surface)] border border-[var(--t-border)] p-5 lg:p-6">
+            <div className="h-2 w-20 bg-[var(--t-elevated)] mb-5" />
+            <div className="h-7 w-28 bg-[var(--t-elevated)] mb-3" />
+            <div className="h-2 w-24 bg-[var(--t-elevated)]" />
+          </div>
+        ))}
+      </div>
+      <div className="bg-[var(--t-surface)] border border-[var(--t-border)] p-6">
+        <div className="h-2 w-24 bg-[var(--t-elevated)] mb-8" />
+        <div className="flex h-48 items-end gap-3">
+          {[44, 66, 52, 78, 48, 86, 58, 72, 42, 64, 76, 60].map((height, i) => (
+            <div key={i} className="flex-1 bg-[var(--t-elevated)]" style={{ height: `${height}%` }} />
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

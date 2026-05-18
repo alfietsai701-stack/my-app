@@ -1,17 +1,12 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
+import { getGroupedBookServices } from '@/lib/service-data'
 
 export async function GET() {
-  const services = await prisma.service.findMany({
-    select: { id: true, name: true, price: true, durationMin: true, category: true },
-    orderBy: [{ category: 'asc' }, { price: 'asc' }],
+  const grouped = await getGroupedBookServices()
+
+  return NextResponse.json(grouped, {
+    headers: {
+      'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=600',
+    },
   })
-
-  const grouped: Record<string, typeof services> = {}
-  for (const s of services) {
-    if (!grouped[s.category]) grouped[s.category] = []
-    grouped[s.category].push(s)
-  }
-
-  return NextResponse.json(grouped)
 }

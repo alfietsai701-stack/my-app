@@ -7,7 +7,8 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "db:indexes": "prisma db execute --file prisma/performance-indexes.sql --schema prisma/schema.prisma"
   },
   "dependencies": {
     "@line/liff": "^2.28.0",
