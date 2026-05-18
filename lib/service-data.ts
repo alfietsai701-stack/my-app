@@ -39,5 +39,5 @@ export async function getGroupedBookServices() {
 }
 
 export function revalidateServices() {
-  revalidateTag(SERVICES_CACHE_TAG)
+  revalidateTag(SERVICES_CACHE_TAG, 'max')
 }
