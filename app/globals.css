@@ -175,6 +175,16 @@
     line-height: 1.35;
     font-weight: 600;
   }
+  :where(button, input, textarea, select, a):focus {
+    outline: none;
+  }
+  :where(button, input, textarea, select, a):focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(185, 152, 104, 0.22);
+  }
+  :where(button, input, textarea, select, a) {
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 /* ── Utility classes ── */
