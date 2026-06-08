@@ -40,7 +40,7 @@ export async function getAvailableSlots(date: string, durationMin: number): Prom
     prisma.setting.findUnique({ where: { key: 'book_blocks' } }),
   ])
 
-  const blocks = blocksSetting?.value ?? []
+  const blocks = (blocksSetting?.value ?? []) as Array<{ date: string; start: string; end: string }>
 
   // Each existing appointment blocks [apptStart, apptStart + duration + buffer)
   // Convert UTC → Taiwan time (UTC+8) before extracting hours
