@@ -95,7 +95,9 @@ export default function AppointmentsClient({
   const [selected, setSelected]   = useState<Appt|null>(null)
 
   const [adding, setAdding]         = useState(false)
+  const [addingBlock, setAddingBlock] = useState(false)
   const [paying, setPaying]         = useState(false)
+  const [blocks, setBlocks]         = useState<Array<{id:string;date:string;start:string;end:string;note?:string}>>([])
   const [customers, setCustomers]   = useState<Customer[]>([])
   const [services, setServices]     = useState<Service[]>(initialServices)
   const [custQ, setCustQ]           = useState('')
@@ -114,6 +116,16 @@ export default function AppointmentsClient({
     setMonthData(prev => ({ ...prev, [m]: data }))
   }, [])
 
+  const fetchBlocks = useCallback(async (m: string) => {
+    const res = await fetch(`/api/settings/blocks?month=${m}`)
+    if (!res.ok) return
+    const data = await res.json()
+    setBlocks(prev => {
+      const merged = [...prev.filter(b => !b.date.startsWith(m)), ...data]
+      return merged
+    })
+  }, [])
+
   const loadMonth = useCallback((m: string) => {
     setMonthData(prev => { if (prev[m]) return prev; fetchMonth(m); return prev })
   }, [fetchMonth])
@@ -123,13 +135,13 @@ export default function AppointmentsClient({
       ? [...new Set(getWeekDays(weekStart).map(d => toMonthStr(d)))]
       : view === 'month' ? [month]
       : [toMonthStr(new Date(date + 'T00:00:00'))]
-    await Promise.all(months.map(fetchMonth))
+    await Promise.all(months.map(async m => { await fetchMonth(m); await fetchBlocks(m) }))
   }, [view, weekStart, month, date, fetchMonth])
 
   useEffect(() => {
-    if (view === 'week') getWeekDays(weekStart).map(d => toMonthStr(d)).forEach(loadMonth)
-    else if (view === 'month') loadMonth(month)
-    else loadMonth(toMonthStr(new Date(date + 'T00:00:00')))
+    if (view === 'week') getWeekDays(weekStart).map(d => toMonthStr(d)).forEach(m => { loadMonth(m); fetchBlocks(m) })
+    else if (view === 'month') { loadMonth(month); fetchBlocks(month) }
+    else { const m = toMonthStr(new Date(date + 'T00:00:00')); loadMonth(m); fetchBlocks(m) }
   }, [view, weekStart, month, date, loadMonth])
 
   useEffect(() => {
@@ -157,6 +169,11 @@ export default function AppointmentsClient({
   function openAdd(preDate?: string, preSlot?: string) {
     setForm({ customerId:'', serviceId: services[0]?.id??'', date: preDate??(view==='day'?date:today), time: preSlot??slots[0]??'11:00', note:'' })
     setCustQ(''); setCreatingCust(false); setNewCust({ name:'', phone:'' }); setAdding(true)
+  }
+
+  function openAddBlock(preDate?: string, preStart?: string) {
+    setBlockForm({ date: preDate??today, start: preStart??slots[0]??'11:00', end: slots[0]??'12:00', note: '' })
+    setAddingBlock(true)
   }
 
   async function handleCreateCustomer() {
@@ -195,7 +212,26 @@ export default function AppointmentsClient({
     setSelected(null); await reload()
   }
 
+  async function handleDeleteBlock(id: string) {
+    if (!confirm('確定要刪除這個休假？')) return
+    await fetch(`/api/settings/blocks?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
+    await reload()
+  }
+
   const selectedCustomer = customers.find(c => c.id === form.customerId)
+
+  // block form
+  const [blockForm, setBlockForm] = useState({ date: today, start: slots[0]??'11:00', end: slots[0]??'12:00', note: '' })
+  const [creatingBlock, setCreatingBlock] = useState(false)
+
+  async function handleCreateBlock() {
+    if (!blockForm.date || !blockForm.start || !blockForm.end) return
+    setCreatingBlock(true)
+    const res = await fetch('/api/settings/blocks', { method:'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(blockForm) })
+    setCreatingBlock(false)
+    setAddingBlock(false)
+    await reload()
+  }
 
   // ── shared sub-components ──
 
@@ -238,6 +274,20 @@ export default function AppointmentsClient({
         )}
       </div>
     )
+  }
+
+  function isManuallyBlocked(ds: string, slot: string) {
+    for (const b of blocks) {
+      if (b.date !== ds) continue
+      // check if slot is within [start, end)
+      const [sh, sm] = b.start.split(':').map(Number)
+      const [eh, em] = b.end.split(':').map(Number)
+      const slotMin = slot.split(':').map(Number).reduce((a,c,i)=> a + (i===0?c*60:c), 0)
+      const startMin = sh*60 + sm
+      const endMin = eh*60 + em
+      if (slotMin >= startMin && slotMin < endMin) return true
+    }
+    return false
   }
 
   // ── render ────────────────────────────────────────────────────────────────
@@ -297,6 +347,11 @@ export default function AppointmentsClient({
           <span className="hidden sm:inline">新增預約</span>
           <span className="sm:hidden">新增</span>
         </button>
+        <button onClick={() => openAddBlock()}
+          className="ml-2 flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-medium shrink-0 transition-all"
+          style={{ background:'var(--t-elevated)', color:'var(--t-text-3)', border:'1px solid var(--t-border)' }}>
+          新增休假
+        </button>
       </div>
 
       {/* ── body ── */}
@@ -349,7 +404,7 @@ export default function AppointmentsClient({
                     {weekDays.map(day => {
                       const ds = toDateStr(day)
                       const dayAppts = byDate[ds]??[]
-                      const blocked  = calcBlocked(dayAppts, slots).has(slot)
+                      const blocked  = calcBlocked(dayAppts, slots).has(slot) || isManuallyBlocked(ds, slot)
                       return (
                         <div key={ds} className="border-r last:border-r-0"
                           style={{ borderColor:'var(--t-border)', background: blocked?'rgba(0,0,0,0.02)': toDateStr(day)===today?'rgba(185,152,104,0.06)':'' }}>
@@ -385,7 +440,7 @@ export default function AppointmentsClient({
               {slots.map(slot => {
                 const dayAppts = byDate[date]??[]
                 const cellAppts = dayAppts.filter(a => apptMatchesSlot(a, slot))
-                const blocked   = calcBlocked(dayAppts, slots).has(slot)
+                const blocked   = calcBlocked(dayAppts, slots).has(slot) || isManuallyBlocked(date, slot)
                 return (
                   <div key={slot} className="flex border-b group"
                     style={{ borderColor:'var(--t-border)', minHeight:72 }}>
@@ -703,6 +758,64 @@ export default function AppointmentsClient({
                 className="w-full py-3 rounded-xl text-sm font-bold disabled:opacity-50"
                 style={{ background:'var(--t-accent)', color:'#fff' }}>
                 {saving?'建立中…':'建立預約'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ══ BLOCK MODAL ══ */}
+      {addingBlock && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          style={{ background:'rgba(15,30,56,0.45)', backdropFilter:'blur(4px)' }}
+          onClick={() => setAddingBlock(false)}>
+          <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl overflow-y-auto max-h-[90vh]"
+            style={{ background:'var(--t-surface)', boxShadow:'var(--t-shadow-md)' }}
+            onClick={e => e.stopPropagation()}>
+            <div className="flex justify-center pt-3 sm:hidden">
+              <div className="w-10 h-1 rounded-full" style={{ background:'var(--t-border-s)' }}/>
+            </div>
+            <div className="flex items-center justify-between px-6 py-4" style={{ borderBottom:'1px solid var(--t-border)' }}>
+              <h3 className="text-base font-bold" style={{ color:'var(--t-text)' }}>新增休假</h3>
+              <button onClick={() => setAddingBlock(false)} className="p-1.5 rounded-lg" style={{ color:'var(--t-text-4)' }}>
+                <X size={16} strokeWidth={2}/>
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-5">
+              <div>
+                <label className="block text-xs font-semibold mb-2" style={{ color:'var(--t-text-3)' }}>日期</label>
+                <input type="date" value={blockForm.date} onChange={e => setBlockForm(b => ({ ...b, date: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                  style={{ background:'var(--t-elevated)', border:'1.5px solid var(--t-border)', color:'var(--t-text)' }} />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-2" style={{ color:'var(--t-text-3)' }}>開始時段</label>
+                <select value={blockForm.start} onChange={e => setBlockForm(b => ({ ...b, start: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                  style={{ background:'var(--t-elevated)', border:'1.5px solid var(--t-border)', color:'var(--t-text)' }}>
+                  {slots.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-2" style={{ color:'var(--t-text-3)' }}>結束時段</label>
+                <select value={blockForm.end} onChange={e => setBlockForm(b => ({ ...b, end: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                  style={{ background:'var(--t-elevated)', border:'1.5px solid var(--t-border)', color:'var(--t-text)' }}>
+                  {slots.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-2" style={{ color:'var(--t-text-3)' }}>備註（選填）</label>
+                <input value={blockForm.note} onChange={e => setBlockForm(b => ({ ...b, note: e.target.value }))}
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                  style={{ background:'var(--t-elevated)', border:'1.5px solid var(--t-border)', color:'var(--t-text)' }} />
+              </div>
+            </div>
+            <div className="px-6 pb-6">
+              <button onClick={handleCreateBlock} disabled={creatingBlock||!blockForm.date||!blockForm.start||!blockForm.end}
+                className="w-full py-3 rounded-xl text-sm font-bold disabled:opacity-50"
+                style={{ background:'var(--t-accent)', color:'#fff' }}>
+                {creatingBlock?'建立中…':'建立休假'}
               </button>
             </div>
           </div>

@@ -30,13 +30,17 @@ export async function getAvailableSlots(date: string, durationMin: number): Prom
   const start = new Date(y, m - 1, day, 0, 0, 0)
   const end   = new Date(y, m - 1, day, 23, 59, 59)
 
-  const [businessSlots, appts] = await Promise.all([
+  const [businessSlots, appts, blocksSetting] = await Promise.all([
     getBusinessSlots(),
     prisma.appointment.findMany({
       where: { scheduledAt: { gte: start, lte: end }, status: { not: 'cancelled' } },
       include: { service: { select: { durationMin: true } } },
     }),
+    // also read manual blocks from settings
+    prisma.setting.findUnique({ where: { key: 'book_blocks' } }),
   ])
+
+  const blocks = blocksSetting?.value ?? []
 
   // Each existing appointment blocks [apptStart, apptStart + duration + buffer)
   // Convert UTC → Taiwan time (UTC+8) before extracting hours
@@ -46,6 +50,18 @@ export async function getAvailableSlots(date: string, durationMin: number): Prom
     const apptStart = tw.getUTCHours() * 60 + tw.getUTCMinutes()
     return { start: apptStart, end: apptStart + a.service.durationMin + BUFFER_MIN }
   })
+
+  // Add manual blocks (stored as {date, start, end})
+  try {
+    for (const b of blocks) {
+      if (b.date !== date) continue
+      const [sh, sm] = b.start.split(':').map(Number)
+      const [eh, em] = b.end.split(':').map(Number)
+      const startMin = sh * 60 + sm
+      const endMin = eh * 60 + em
+      blockedIntervals.push({ start: startMin, end: endMin })
+    }
+  } catch {}
 
   return businessSlots.filter(slot => {
     const [sh, sm]    = slot.split(':').map(Number)
