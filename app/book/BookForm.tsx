@@ -232,8 +232,8 @@ export default function BookForm({ businessName }: { businessName: string }) {
   if (done) {
     return (
       <div style={pageCenter}>
-        <div style={successCard}>
-          <div style={successMark}>
+        <div style={successCard} className="bk-success-card">
+          <div style={successMark} className="bk-success-mark">
             <CheckCircle2 size={42} color="white" />
           </div>
           <p style={{ color: C.accentH, fontSize: 12, fontWeight: 700, letterSpacing: '0.26em', margin: '0 0 10px' }}>
@@ -285,6 +285,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
           <Stepper step={step} />
 
           <div style={content}>
+            <div key={step} className="bk-step-content">
             {step === 0 && (
               <section>
                 <SectionTitle icon={<Sparkles size={17} />} title="選擇服務" subtitle="先選分類，再選擇想預約的項目。" />
@@ -303,7 +304,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
 
                     <div style={serviceList}>
                       {visibleServices.map(svc => (
-                        <button key={svc.id} onClick={() => selectService(svc.id)} style={serviceStyle(form.serviceId === svc.id)}>
+                        <button key={svc.id} onClick={() => selectService(svc.id)} style={serviceStyle(form.serviceId === svc.id)} className="bk-service">
                           <div>
                             <p style={{ color: form.serviceId === svc.id ? C.accentH : C.text, fontSize: 15, fontWeight: 700, margin: 0 }}>{svc.name}</p>
                             <p style={{ color: C.text4, fontSize: 13, margin: '6px 0 0' }}>{svc.durationMin} 分鐘</p>
@@ -334,7 +335,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
                     const d = compactDate(date)
                     const active = form.date === date
                     return (
-                      <button key={date} onClick={() => selectDate(date)} style={dateChipStyle(active)}>
+                      <button key={date} onClick={() => selectDate(date)} style={dateChipStyle(active)} className="bk-chip">
                         <span style={{ fontSize: 11, color: active ? '#FFFFFF' : C.text4 }}>{d.month}</span>
                         <strong style={{ fontSize: 20, lineHeight: 1, color: active ? '#FFFFFF' : C.text }}>{d.day}</strong>
                         <span style={{ fontSize: 11, color: active ? 'rgba(255,255,255,0.78)' : C.text3 }}>{d.weekday}</span>
@@ -369,7 +370,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
                     ) : (
                       <div style={slotGrid}>
                         {slots.map(slot => (
-                          <button key={slot} onClick={() => setField('time', slot)} style={slotStyle(form.time === slot)}>
+                          <button key={slot} onClick={() => setField('time', slot)} style={slotStyle(form.time === slot)} className="bk-chip">
                             {slot}
                           </button>
                         ))}
@@ -421,16 +422,17 @@ export default function BookForm({ businessName }: { businessName: string }) {
                 </button>
               </section>
             )}
+            </div>
           </div>
 
           <div style={navBar}>
             {step > 0 ? (
-              <button onClick={() => setStep(s => s - 1)} style={backButton}>
+              <button onClick={() => setStep(s => s - 1)} style={backButton} className="bk-nav-btn">
                 <ChevronLeft size={18} />上一步
               </button>
             ) : <div />}
             {step < 3 && (
-              <button onClick={() => setStep(s => s + 1)} disabled={isDisabled} style={nextButton(isDisabled)}>
+              <button onClick={() => setStep(s => s + 1)} disabled={isDisabled} style={nextButton(isDisabled)} className="bk-nav-btn">
                 下一步
               </button>
             )}
@@ -670,6 +672,7 @@ const stepDot = (active: boolean, done: boolean): CSSProperties => ({
   border: `1px solid ${active ? C.accent : C.borderStrong}`,
   fontSize: done ? 0 : 12,
   fontWeight: 800,
+  transition: 'background 0.25s, border-color 0.25s, color 0.25s',
 })
 
 const content: CSSProperties = {
@@ -694,6 +697,7 @@ const tabStyle = (active: boolean): CSSProperties => ({
   fontWeight: 750,
   whiteSpace: 'nowrap',
   cursor: 'pointer',
+  transition: 'background 0.18s, border-color 0.18s, color 0.18s',
 })
 
 const serviceList: CSSProperties = {
@@ -712,6 +716,7 @@ const serviceStyle = (active: boolean): CSSProperties => ({
   background: active ? C.accentBg : C.surface,
   padding: '16px 15px',
   cursor: 'pointer',
+  transition: 'background 0.18s, border-color 0.18s',
 })
 
 const selectedServiceBar: CSSProperties = {
@@ -752,6 +757,7 @@ const dateChipStyle = (active: boolean): CSSProperties => ({
   justifyContent: 'center',
   gap: 5,
   cursor: 'pointer',
+  transition: 'background 0.18s, border-color 0.18s',
 })
 
 const datePickerLabel: CSSProperties = {
@@ -799,6 +805,7 @@ const slotStyle = (active: boolean): CSSProperties => ({
   fontSize: 15,
   fontWeight: 800,
   cursor: 'pointer',
+  transition: 'background 0.18s, border-color 0.18s, color 0.18s',
 })
 
 const fieldGrid: CSSProperties = {

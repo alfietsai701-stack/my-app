@@ -224,3 +224,53 @@
 .cube-btn-ghost:hover {
   background: var(--t-accent-bg);
 }
+
+/* ── BookForm animations ─────────────────────────────── */
+@keyframes bk-slide-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+@keyframes bk-success-pop {
+  from { opacity: 0; transform: scale(0.88) translateY(28px); }
+  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+}
+@keyframes bk-mark-bounce {
+  0%   { transform: scale(0) rotate(-20deg); }
+  65%  { transform: scale(1.22) rotate(6deg); }
+  100% { transform: scale(1)    rotate(0deg); }
+}
+
+.bk-step-content { animation: bk-slide-in 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
+.bk-success-card { animation: bk-success-pop 0.42s cubic-bezier(0.22, 1, 0.36, 1); }
+.bk-success-mark { animation: bk-mark-bounce 0.52s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both; }
+
+.bk-chip { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.bk-chip:hover:not(:disabled) {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 18px rgba(51, 40, 30, 0.14);
+}
+.bk-chip:active:not(:disabled) {
+  transform: scale(0.94);
+  transition-duration: 0.07s;
+}
+
+.bk-service { transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.bk-service:hover:not(:disabled) {
+  transform: translateX(5px);
+  box-shadow: -3px 0 0 0 #B99868;
+}
+.bk-service:active:not(:disabled) {
+  transform: translateX(2px);
+  transition-duration: 0.07s;
+}
+
+.bk-nav-btn { transition: transform 0.14s ease, box-shadow 0.14s ease; }
+.bk-nav-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(51, 40, 30, 0.22);
+}
+.bk-nav-btn:active:not(:disabled) {
+  transform: scale(0.97);
+  transition-duration: 0.07s;
+}
+/* ─────────────────────────────────────────────────────── */

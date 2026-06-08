@@ -110,8 +110,8 @@ export default function InventoryPage() {
   const visibleCats = filterCat === '全部' ? [...CATEGORIES] : [filterCat]
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden">
-      <header className="h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-center justify-between px-8 shrink-0">
+    <div className="relative flex flex-col flex-1 overflow-hidden">
+      <header className="h-auto min-h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 lg:px-8 py-3 sm:py-0 shrink-0">
         <div className="flex items-center gap-4">
           <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-3)] uppercase">庫存管理</p>
           {lowCount > 0 && (
@@ -120,7 +120,7 @@ export default function InventoryPage() {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button onClick={startStockcheck} disabled={saving}
             className="border border-[var(--t-border-s)] text-[var(--t-text-3)] hover:border-[var(--t-accent)] hover:text-[var(--t-accent)] px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200 disabled:opacity-40">
             開始盤點
@@ -265,13 +265,13 @@ export default function InventoryPage() {
 
       {/* Stockcheck overlay */}
       {checking && session && (
-        <div className="fixed inset-0 bg-[var(--t-bg)] z-50 flex flex-col">
-          <div className="h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-center justify-between px-8 shrink-0">
+        <div className="absolute inset-0 bg-[var(--t-bg)] z-40 flex flex-col">
+          <div className="h-auto min-h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 lg:px-8 py-3 sm:py-0 shrink-0">
             <div>
               <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-3)] uppercase">庫存盤點</p>
               <p className="text-[10px] text-[var(--t-text-4)] tracking-wide mt-0.5">依序填入實際清點數量，差異欄位即時顯示</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <button onClick={() => setChecking(false)} className="border border-[var(--t-border-s)] text-[var(--t-text-3)] hover:text-[var(--t-text-2)] px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">取消</button>
               <button onClick={confirmStockcheck} disabled={saving}
                 className="border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] disabled:opacity-40 px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">
@@ -280,9 +280,9 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto p-8">
-            <div className="bg-[var(--t-surface)] border border-[var(--t-border)]">
-              <table className="w-full table-fixed">
+          <div className="flex-1 overflow-auto p-4 lg:p-8">
+            <div className="bg-[var(--t-surface)] border border-[var(--t-border)] overflow-x-auto">
+              <table className="w-full min-w-[560px] table-fixed">
                 <colgroup>
                   <col className="w-auto" />
                   <col style={{ width: '80px' }} />
@@ -332,8 +332,8 @@ export default function InventoryPage() {
 
       {/* Add / Edit modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--t-surface)] border border-[var(--t-border)] w-full max-w-sm p-8">
+        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-40 p-4 overflow-y-auto">
+          <div className="bg-[var(--t-surface)] border border-[var(--t-border)] w-full max-w-sm max-h-[calc(100%-2rem)] overflow-y-auto p-6 sm:p-8">
             <div className="flex items-center justify-between mb-8">
               <p className="text-[10px] tracking-[0.3em] text-[var(--t-text-2)] uppercase">{editing ? '編輯品項' : '新增品項'}</p>
               <button onClick={() => { setAdding(false); setEditing(null) }} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none transition-colors">×</button>
@@ -364,8 +364,8 @@ export default function InventoryPage() {
 
       {/* Adjust stock modal */}
       {adjusting && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--t-surface)] border border-[var(--t-border)] w-full max-w-xs p-8">
+        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-40 p-4 overflow-y-auto">
+          <div className="bg-[var(--t-surface)] border border-[var(--t-border)] w-full max-w-xs max-h-[calc(100%-2rem)] overflow-y-auto p-6 sm:p-8">
             <div className="flex items-center justify-between mb-6">
               <p className="text-[10px] tracking-[0.3em] text-[var(--t-text-2)] uppercase">調整庫存</p>
               <button onClick={() => setAdjusting(null)} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none transition-colors">×</button>
