@@ -9,7 +9,8 @@ export async function GET(req: Request) {
     const month = url.searchParams.get('month')
 
     const setting = await prisma.setting.findUnique({ where: { key: 'book_blocks' } })
-    const blocks: Block[] = setting?.value ?? []
+    const raw = setting?.value as any
+    const blocks: Block[] = Array.isArray(raw) ? raw.filter((b: any) => b && typeof b.date === 'string' && typeof b.start === 'string' && typeof b.end === 'string') : []
 
     if (month) {
       const filtered = blocks.filter(b => b.date.startsWith(month))
@@ -32,7 +33,8 @@ export async function POST(req: Request) {
     const newBlock: Block = { id, date, start, end, note }
 
     const setting = await prisma.setting.findUnique({ where: { key: 'book_blocks' } })
-    const blocks: Block[] = setting?.value ?? []
+    const raw = setting?.value as any
+    const blocks: Block[] = Array.isArray(raw) ? raw.filter((b: any) => b && typeof b.date === 'string' && typeof b.start === 'string' && typeof b.end === 'string') : []
     const updated = [...blocks, newBlock]
     await prisma.setting.upsert({ where: { key: 'book_blocks' }, create: { key: 'book_blocks', value: updated }, update: { value: updated } })
 
@@ -49,8 +51,9 @@ export async function DELETE(req: Request) {
     if (!id) return NextResponse.json({ error: 'missing id' }, { status: 400 })
 
     const setting = await prisma.setting.findUnique({ where: { key: 'book_blocks' } })
-    const blocks = setting?.value ?? []
-    const updated = (blocks as Block[]).filter((b: Block) => b.id !== id)
+    const raw = setting?.value as any
+    const blocks: Block[] = Array.isArray(raw) ? raw.filter((b: any) => b && typeof b.date === 'string' && typeof b.start === 'string' && typeof b.end === 'string') : []
+    const updated = blocks.filter((b: Block) => b.id !== id)
 
     await prisma.setting.upsert({ where: { key: 'book_blocks' }, create: { key: 'book_blocks', value: updated }, update: { value: updated } })
 
