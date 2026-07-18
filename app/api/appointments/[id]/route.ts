@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { withAuth } from '@/lib/with-auth'
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withAuth(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
   const body = await req.json()
   const data: Record<string, unknown> = {}
@@ -42,10 +43,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
 
   return NextResponse.json(appointment)
-}
+})
 
-export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withAuth(async (_: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
   await prisma.appointment.delete({ where: { id } })
   return new NextResponse(null, { status: 204 })
-}
+})

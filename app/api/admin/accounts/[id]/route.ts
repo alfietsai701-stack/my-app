@@ -1,20 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
-import { getSession } from '@/lib/auth-server'
+import { withPermission } from '@/lib/with-auth'
 
-async function requireSettings() {
-  const session = await getSession()
-  if (!session?.permissions?.settings) {
-    return NextResponse.json({ error: '無權限' }, { status: 403 })
-  }
-  return null
-}
-
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const denied = await requireSettings()
-  if (denied) return denied
-
+export const PATCH = withPermission('settings', async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
   const { name, password, permissions } = await request.json()
 
@@ -29,13 +18,10 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     select: { id: true, email: true, name: true, permissions: true, createdAt: true },
   })
   return NextResponse.json(user)
-}
+})
 
-export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const denied = await requireSettings()
-  if (denied) return denied
-
+export const DELETE = withPermission('settings', async (_: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
   await prisma.adminUser.delete({ where: { id } })
   return NextResponse.json({ ok: true })
-}
+})

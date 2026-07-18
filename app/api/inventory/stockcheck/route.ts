@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-export async function GET() {
+import { withPermission } from '@/lib/with-auth'
+
+export const GET = withPermission('inventory', async () => {
   const sessions = await prisma.stockCheckSession.findMany({
     orderBy: { createdAt: 'desc' },
     take: 10,
     include: { entries: true },
   })
   return NextResponse.json(sessions)
-}
+})
 
 // Create a new draft session snapshotting current inventory
-export async function POST(req: NextRequest) {
+export const POST = withPermission('inventory', async (req: NextRequest) => {
   try {
     const { note } = await req.json().catch(() => ({ note: undefined }))
     const items = await prisma.inventoryItem.findMany({ orderBy: [{ category: 'asc' }, { name: 'asc' }] })
@@ -33,4 +35,4 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 })
   }
-}
+})

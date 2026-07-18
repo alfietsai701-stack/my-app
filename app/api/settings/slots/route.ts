@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getBusinessSlots } from '@/lib/slots'
 import { prisma } from '@/lib/prisma'
+import { withAuth, withPermission } from '@/lib/with-auth'
 
-export async function GET() {
+export const GET = withAuth(async () => {
   const slots = await getBusinessSlots()
   return NextResponse.json({ slots })
-}
+})
 
-export async function PATCH(req: NextRequest) {
+export const PATCH = withPermission('settings', async (req: NextRequest) => {
   const { slots } = await req.json()
   if (!Array.isArray(slots)) return NextResponse.json({ error: 'invalid' }, { status: 400 })
   await prisma.setting.upsert({
@@ -16,4 +17,4 @@ export async function PATCH(req: NextRequest) {
     update: { value: slots },
   })
   return NextResponse.json({ slots })
-}
+})

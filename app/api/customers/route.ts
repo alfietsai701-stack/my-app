@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { serializeCustomer } from '@/lib/customer-serializers'
+import { withAuth } from '@/lib/with-auth'
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   const q = req.nextUrl.searchParams.get('q') ?? ''
   const customers = await prisma.customer.findMany({
     where: {
@@ -13,13 +14,13 @@ export async function GET(req: NextRequest) {
     include: { _count: { select: { appointments: true } } },
   })
   return NextResponse.json(customers.map(serializeCustomer))
-}
+})
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   const { name, phone, birthday, note } = await req.json()
   const customer = await prisma.customer.create({
     data: { name, phone, birthday: birthday ? new Date(birthday) : null, note: note || null },
     include: { _count: { select: { appointments: true } } },
   })
   return NextResponse.json(serializeCustomer(customer), { status: 201 })
-}
+})

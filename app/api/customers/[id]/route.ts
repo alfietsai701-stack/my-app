@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { serializeCustomer, serializeCustomerDetail } from '@/lib/customer-serializers'
+import { withAuth } from '@/lib/with-auth'
 
-export async function GET(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const GET = withAuth(async (_: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
   const customer = await prisma.customer.findUnique({
     where: { id },
@@ -16,9 +17,9 @@ export async function GET(_: NextRequest, { params }: { params: Promise<{ id: st
   })
   if (!customer) return NextResponse.json({ error: 'not found' }, { status: 404 })
   return NextResponse.json(serializeCustomerDetail(customer))
-}
+})
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withAuth(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
   const { name, phone, birthday, note } = await req.json()
   const customer = await prisma.customer.update({
@@ -27,10 +28,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     include: { _count: { select: { appointments: true } } },
   })
   return NextResponse.json(serializeCustomer(customer))
-}
+})
 
-export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withAuth(async (_: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
   await prisma.customer.update({ where: { id }, data: { deletedAt: new Date() } })
   return new NextResponse(null, { status: 204 })
-}
+})

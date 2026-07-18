@@ -13,7 +13,7 @@ const SOCIAL_URL    = process.env.LINE_SOCIAL_URL    ?? ''
 
 function verifySignature(body: string, signature: string): boolean {
   const secret = process.env.LINE_CHANNEL_SECRET
-  if (!secret) return true
+  if (!secret) return false  // 未設定 secret 時拒絕所有請求
   const hash = crypto.createHmac('sha256', secret).update(body).digest('base64')
   return hash === signature
 }

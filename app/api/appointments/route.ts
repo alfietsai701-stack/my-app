@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { withAuth } from '@/lib/with-auth'
 
-export async function GET(req: NextRequest) {
+export const GET = withAuth(async (req: NextRequest) => {
   const { searchParams } = req.nextUrl
   const date  = searchParams.get('date')  // YYYY-MM-DD
   const month = searchParams.get('month') // YYYY-MM
@@ -22,9 +23,9 @@ export async function GET(req: NextRequest) {
     },
   })
   return NextResponse.json(appointments)
-}
+})
 
-export async function POST(req: NextRequest) {
+export const POST = withAuth(async (req: NextRequest) => {
   const { customerId, serviceId, scheduledAt, note } = await req.json()
   const appointment = await prisma.appointment.create({
     data: { customerId, serviceId, scheduledAt: new Date(scheduledAt), note: note || null },
@@ -35,4 +36,4 @@ export async function POST(req: NextRequest) {
     },
   })
   return NextResponse.json(appointment, { status: 201 })
-}
+})

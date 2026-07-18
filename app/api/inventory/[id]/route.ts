@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { withPermission } from '@/lib/with-auth'
 
-export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const PATCH = withPermission('inventory', async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
   const body = await req.json()
   const data: Record<string, unknown> = {}
@@ -20,10 +21,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   const item = await prisma.inventoryItem.update({ where: { id }, data })
   return NextResponse.json(item)
-}
+})
 
-export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withPermission('inventory', async (_: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
   await prisma.inventoryItem.delete({ where: { id } })
   return new NextResponse(null, { status: 204 })
-}
+})

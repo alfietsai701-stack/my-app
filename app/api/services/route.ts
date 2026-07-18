@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getSession } from '@/lib/auth-server'
 import { getServices, revalidateServices } from '@/lib/service-data'
+import { withAuth, withPermission } from '@/lib/with-auth'
 
-export async function GET() {
+export const GET = withAuth(async () => {
   const services = await getServices()
   return NextResponse.json(services)
-}
+})
 
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session?.permissions?.services) return NextResponse.json({ error: '無權限' }, { status: 403 })
-
+export const POST = withPermission('services', async (request: NextRequest) => {
   const { name, price, durationMin, category } = await request.json()
   if (!name || price == null || !durationMin || !category) {
     return NextResponse.json({ error: '請填寫所有欄位' }, { status: 400 })
@@ -22,4 +19,4 @@ export async function POST(request: NextRequest) {
   })
   revalidateServices()
   return NextResponse.json(service, { status: 201 })
-}
+})

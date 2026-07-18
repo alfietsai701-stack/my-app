@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { withPermission } from '@/lib/with-auth'
 
-export async function GET(req: NextRequest) {
+export const GET = withPermission('reports', async (req: NextRequest) => {
   const monthParam = req.nextUrl.searchParams.get('month') // YYYY-MM
   const now = new Date()
   const [y, m] = monthParam
@@ -85,4 +86,4 @@ export async function GET(req: NextRequest) {
     apptCount, prevAppts, completedCount, avgTicket,
     services, categories, trendData,
   })
-}
+})

@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { getSession } from '@/lib/auth-server'
 import { revalidateServices } from '@/lib/service-data'
+import { withPermission } from '@/lib/with-auth'
 
-async function requireServices() {
-  const session = await getSession()
-  if (!session?.permissions?.services) return NextResponse.json({ error: '無權限' }, { status: 403 })
-  return null
-}
-
-export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const denied = await requireServices()
-  if (denied) return denied
-
+export const PATCH = withPermission('services', async (request: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
   const { name, price, durationMin, category } = await request.json()
 
@@ -27,14 +18,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   })
   revalidateServices()
   return NextResponse.json(service)
-}
+})
 
-export async function DELETE(_: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const denied = await requireServices()
-  if (denied) return denied
-
+export const DELETE = withPermission('services', async (_: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
   await prisma.service.delete({ where: { id } })
   revalidateServices()
   return NextResponse.json({ ok: true })
-}
+})
