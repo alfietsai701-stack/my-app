@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { withAuth } from '@/lib/with-auth'
 
+const VALID_STATUSES = new Set(['pending', 'completed', 'cancelled', 'no-show'])
+
 export const PATCH = withAuth(async (req: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   const { id } = await params
   const body = await req.json()
+  if (body.status !== undefined && !VALID_STATUSES.has(body.status)) {
+    return NextResponse.json({ error: `無效的 status，允許值：${[...VALID_STATUSES].join('、')}` }, { status: 400 })
+  }
   const data: Record<string, unknown> = {}
   if (body.status      !== undefined) data.status      = body.status
   if (body.note        !== undefined) data.note        = body.note || null
