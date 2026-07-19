@@ -1,13 +1,19 @@
+import { PrismaClient } from '@prisma/client'
 import { prisma } from './prisma'
 
 const DEFAULT_SLOTS = ['11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00']
 const BUFFER_MIN    = 60
 const CLOSING_MIN   = 20 * 60
 
-// In-memory cache: avoids a DB round-trip on every slot query (TTL 5 min)
+// In-memory cache: avoids a DB round-trip on every slot query (TTL 10 min)
+// Note: in serverless each instance has its own cache — acceptable for rarely-changing config
 let _slotsCache: string[] | null = null
 let _slotsCachedAt = 0
 const SLOTS_TTL = 10 * 60 * 1000
+
+// Supports both the global PrismaClient and the interactive-transaction client
+// (Prisma.TransactionClient is PrismaClient minus $connect/$disconnect/$on/$transaction/$use/$extends)
+type DbClient = Omit<PrismaClient, '$connect' | '$disconnect' | '$on' | '$transaction' | '$use' | '$extends'>
 
 export async function getBusinessSlots(): Promise<string[]> {
   if (_slotsCache && Date.now() - _slotsCachedAt < SLOTS_TTL) return _slotsCache
@@ -24,20 +30,25 @@ export async function getBusinessSlots(): Promise<string[]> {
   return DEFAULT_SLOTS
 }
 
-// Returns slots available for a new appointment of durationMin on the given date
-export async function getAvailableSlots(date: string, durationMin: number): Promise<string[]> {
+// Returns slots available for a new appointment of durationMin on the given date.
+// Accepts an optional Prisma transaction client so this can be called inside a $transaction.
+export async function getAvailableSlots(
+  date: string,
+  durationMin: number,
+  db: DbClient = prisma,
+): Promise<string[]> {
   const [y, m, day] = date.split('-').map(Number)
   const start = new Date(y, m - 1, day, 0, 0, 0)
   const end   = new Date(y, m - 1, day, 23, 59, 59)
 
   const [businessSlots, appts, blocksSetting] = await Promise.all([
     getBusinessSlots(),
-    prisma.appointment.findMany({
+    db.appointment.findMany({
       where: { scheduledAt: { gte: start, lte: end }, status: { not: 'cancelled' } },
       include: { service: { select: { durationMin: true } } },
     }),
     // also read manual blocks from settings
-    prisma.setting.findUnique({ where: { key: 'book_blocks' } }),
+    db.setting.findUnique({ where: { key: 'book_blocks' } }),
   ])
 
   const blocks = (blocksSetting?.value ?? []) as Array<{ date: string; start: string; end: string }>

@@ -25,14 +25,9 @@ export async function POST(req: NextRequest) {
   })
   if (!service) return NextResponse.json({ error: '服務不存在' }, { status: 400 })
 
-  const availableSlots = await getAvailableSlots(date, service.durationMin)
-  if (!availableSlots.includes(time)) {
-    return NextResponse.json({ error: '此時段已被預約，請重新選擇其他時間' }, { status: 409 })
-  }
-
   const cleanPhone = phone.replace(/[-\s]/g, '')
 
-  // Upsert customer — update email/lineUserId if provided
+  // Upsert customer — update email/lineUserId if provided (outside tx; idempotent)
   const updateData: Record<string, unknown> = { deletedAt: null }
   if (email) updateData.email = email
   if (lineUserId) updateData.lineUserId = lineUserId
@@ -44,20 +39,40 @@ export async function POST(req: NextRequest) {
     select: { id: true },
   })
 
-  // Store in UTC (Taiwan UTC+8)
-  const [y, m, d] = date.split('-').map(Number)
-  const [h, min]  = time.split(':').map(Number)
-  const scheduledAt = new Date(Date.UTC(y, m - 1, d, h - 8, min, 0))
+  // Advisory-lock + atomic check-and-create inside a single transaction.
+  // pg_advisory_xact_lock serialises concurrent requests for the same date,
+  // eliminating the TOCTOU race condition that would cause double-booking.
+  let appt: { id: string }
+  try {
+    appt = await prisma.$transaction(async (tx) => {
+      // Lock this date exclusively — released automatically when the transaction ends
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${date}))`
 
-  const appt = await prisma.appointment.create({
-    data: {
-      customerId: customer.id,
-      serviceId,
-      scheduledAt,
-      note: note ? `（網路預約）${note}` : '（網路預約）',
-    },
-    select: { id: true },
-  })
+      const availableSlots = await getAvailableSlots(date, service.durationMin, tx)
+      if (!availableSlots.includes(time)) {
+        throw Object.assign(new Error('slot_taken'), { slotTaken: true })
+      }
+
+      const [y, m, d] = date.split('-').map(Number)
+      const [h, min]  = time.split(':').map(Number)
+      const scheduledAt = new Date(Date.UTC(y, m - 1, d, h - 8, min, 0))
+
+      return tx.appointment.create({
+        data: {
+          customerId: customer.id,
+          serviceId,
+          scheduledAt,
+          note: note ? `（網路預約）${note}` : '（網路預約）',
+        },
+        select: { id: true },
+      })
+    }, { timeout: 10_000 })
+  } catch (err) {
+    if (err && typeof err === 'object' && 'slotTaken' in err) {
+      return NextResponse.json({ error: '此時段已被預約，請重新選擇其他時間' }, { status: 409 })
+    }
+    throw err
+  }
 
   const [ym, mm, dd] = date.split('-')
   const dateStr = `${ym}年${mm}月${dd}日`
