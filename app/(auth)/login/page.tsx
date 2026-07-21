@@ -189,6 +189,7 @@ export default function LoginPage() {
                   </div>
                   <div className="space-y-3">
                     {googleEnabled && (
+                      // eslint-disable-next-line @next/next/no-html-link-for-pages
                       <a href="/api/auth/oauth/google"
                         className="flex w-full items-center justify-center gap-2 border py-2.5 text-sm font-medium transition-all hover:bg-[#FAF4EA]"
                         style={{ borderColor: '#DCC7AA', color: '#33281E' }}>
@@ -196,6 +197,7 @@ export default function LoginPage() {
                       </a>
                     )}
                     {lineEnabled && (
+                      // eslint-disable-next-line @next/next/no-html-link-for-pages
                       <a href="/api/auth/oauth/line"
                         className="flex w-full items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
                         style={{ background: '#06C755' }}>

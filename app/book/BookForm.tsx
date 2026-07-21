@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import Quiz from './Quiz'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   Calendar,
@@ -130,6 +131,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
   const [lineUserId, setLineUserId] = useState('')
   const [hours, setHours] = useState<BusinessHours>(DEFAULT_HOURS)
   const [returning, setReturning] = useState(false)
+  const [mode, setMode] = useState<'booking' | 'quiz'>('booking')
   const slotCacheRef = useRef(new Map<string, string[]>())
   const slotRequestRef = useRef(0)
 
@@ -240,6 +242,13 @@ export default function BookForm({ businessName }: { businessName: string }) {
     if (d && form.serviceId) loadSlots(d, form.serviceId)
   }
 
+  function handleQuizPick(category: string, serviceId: string) {
+    setForm(prev => ({ ...prev, category, serviceId, time: '' }))
+    setSlots([])
+    setMode('booking')
+    setStep(0)
+  }
+
   async function submit() {
     if (!step2Valid || !step0Valid || !step1Valid) return
     setSubmitting(true)
@@ -316,6 +325,17 @@ export default function BookForm({ businessName }: { businessName: string }) {
             <div style={priceHint}>{selectedService ? `NT$ ${selectedService.price.toLocaleString()}` : '選擇服務'}</div>
           </div>
 
+          <div style={modeTabs}>
+            <button onClick={() => setMode('booking')} style={modeTab(mode === 'booking')}>預約</button>
+            <button onClick={() => setMode('quiz')} style={modeTab(mode === 'quiz')}>測驗推薦</button>
+          </div>
+
+          {mode === 'quiz' ? (
+            <div style={content}>
+              <Quiz services={services} onPick={handleQuizPick} />
+            </div>
+          ) : (
+          <>
           <Stepper step={step} />
 
           <div style={content}>
@@ -474,6 +494,8 @@ export default function BookForm({ businessName }: { businessName: string }) {
               </button>
             )}
           </div>
+          </>
+          )}
         </section>
       </main>
     </div>
@@ -716,6 +738,25 @@ const content: CSSProperties = {
   padding: 24,
   flex: 1,
 }
+
+const modeTabs: CSSProperties = {
+  display: 'flex',
+  gap: 8,
+  padding: '0 24px',
+  marginTop: 4,
+}
+
+const modeTab = (active: boolean): CSSProperties => ({
+  flex: 1,
+  border: `1px solid ${active ? C.accent : C.border}`,
+  background: active ? C.accentBg : 'transparent',
+  color: active ? C.accentH : C.text3,
+  padding: '9px 0',
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: 'pointer',
+  transition: 'background 0.18s, border-color 0.18s, color 0.18s',
+})
 
 const categoryTabs: CSSProperties = {
   display: 'flex',
