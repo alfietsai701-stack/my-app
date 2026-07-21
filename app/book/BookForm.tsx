@@ -70,9 +70,21 @@ function maxDate(): string {
   return toInputDate(new Date(now.getFullYear(), now.getMonth() + 2, 0))
 }
 
-function isWeekend(dateStr: string): boolean {
+type BusinessHours = { closedWeekdays: number[]; closedDates: string[]; openDates: string[] }
+const DEFAULT_HOURS: BusinessHours = { closedWeekdays: [0], closedDates: [], openDates: [] }
+const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
+
+// 與伺服器端 lib/business-hours.ts 的 isClosedOn 邏輯一致
+function isClosed(dateStr: string, hours: BusinessHours): boolean {
+  if (hours.openDates.includes(dateStr)) return false
+  if (hours.closedDates.includes(dateStr)) return true
   const [y, m, d] = dateStr.split('-').map(Number)
-  return new Date(y, m - 1, d).getDay() === 0
+  return hours.closedWeekdays.includes(new Date(y, m - 1, d).getDay())
+}
+
+function closedLabel(hours: BusinessHours): string {
+  if (hours.closedWeekdays.length === 0) return '每日營業'
+  return '週' + hours.closedWeekdays.slice().sort().map(d => WEEKDAY_LABELS[d]).join('、') + '公休'
 }
 
 function formatDate(d: string): string {
@@ -92,14 +104,14 @@ function compactDate(d: string): { day: string; weekday: string; month: string }
   }
 }
 
-function quickDates(): string[] {
+function quickDates(hours: BusinessHours): string[] {
   const result: string[] = []
   const date = new Date()
   date.setDate(date.getDate() + 1)
 
   while (result.length < 7) {
     const value = toInputDate(date)
-    if (!isWeekend(value)) result.push(value)
+    if (!isClosed(value, hours)) result.push(value)
     date.setDate(date.getDate() + 1)
   }
 
@@ -116,6 +128,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
   const [done, setDone] = useState<{ code: string; service: string; date: string; time: string } | null>(null)
   const [error, setError] = useState('')
   const [lineUserId, setLineUserId] = useState('')
+  const [hours, setHours] = useState<BusinessHours>(DEFAULT_HOURS)
   const slotCacheRef = useRef(new Map<string, string[]>())
   const slotRequestRef = useRef(0)
 
@@ -124,6 +137,11 @@ export default function BookForm({ businessName }: { businessName: string }) {
       setServices(data)
       const firstCategory = Object.keys(data)[0]
       if (firstCategory) setForm(prev => prev.category ? prev : { ...prev, category: firstCategory })
+    }).catch(() => {})
+
+    // 公休日設定：改由後台設定驅動，不再寫死週日
+    fetch('/api/book/config').then(r => r.json()).then((h: BusinessHours) => {
+      if (h && Array.isArray(h.closedWeekdays)) setHours(h)
     }).catch(() => {})
 
     const liffId = process.env.NEXT_PUBLIC_LIFF_ID
@@ -143,7 +161,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
   }, [])
 
   const loadSlots = useCallback(async (date: string, serviceId: string) => {
-    if (!date || !serviceId || isWeekend(date)) {
+    if (!date || !serviceId || isClosed(date, hours)) {
       setSlots([])
       setSlotsLoading(false)
       return
@@ -173,15 +191,15 @@ export default function BookForm({ businessName }: { businessName: string }) {
     } finally {
       if (slotRequestRef.current === requestId) setSlotsLoading(false)
     }
-  }, [services])
+  }, [services, hours])
 
   const flatServices = useMemo(() => Object.values(services).flat(), [services])
   const selectedService = flatServices.find(s => s.id === form.serviceId)
   const categories = Object.keys(services)
   const visibleServices = form.category ? services[form.category] ?? [] : []
-  const dates = useMemo(() => quickDates(), [])
+  const dates = useMemo(() => quickDates(hours), [hours])
   const step0Valid = !!form.serviceId
-  const step1Valid = !!form.date && !!form.time && !isWeekend(form.date)
+  const step1Valid = !!form.date && !!form.time && !isClosed(form.date, hours)
   const step2Valid = form.name.trim().length >= 2 && /^09\d{8}$/.test(form.phone.replace(/[-\s]/g, ''))
   const isDisabled = (step === 0 && !step0Valid) || (step === 1 && !step1Valid) || (step === 2 && !step2Valid)
 
@@ -269,7 +287,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
             <InfoTile label="流程" value="4 步完成" />
             <InfoTile label="預約" value="即時確認" />
             <InfoTile label="通知" value="LINE / Email" />
-            <InfoTile label="營業" value="週日公休" />
+            <InfoTile label="營業" value={closedLabel(hours)} />
           </div>
         </aside>
 
@@ -356,11 +374,11 @@ export default function BookForm({ businessName }: { businessName: string }) {
                   />
                 </label>
 
-                {form.date && isWeekend(form.date) && (
-                  <p style={warningText}>週日公休，請選擇其他日期。</p>
+                {form.date && isClosed(form.date, hours) && (
+                  <p style={warningText}>{closedLabel(hours)}，請選擇其他日期。</p>
                 )}
 
-                {form.date && !isWeekend(form.date) && (
+                {form.date && !isClosed(form.date, hours) && (
                   <div style={{ marginTop: 22 }}>
                     <SectionTitle icon={<Clock size={17} />} title="可預約時段" subtitle={formatDate(form.date)} dense />
                     {slotsLoading ? (
