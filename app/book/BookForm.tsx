@@ -129,6 +129,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
   const [error, setError] = useState('')
   const [lineUserId, setLineUserId] = useState('')
   const [hours, setHours] = useState<BusinessHours>(DEFAULT_HOURS)
+  const [returning, setReturning] = useState(false)
   const slotCacheRef = useRef(new Map<string, string[]>())
   const slotRequestRef = useRef(0)
 
@@ -154,6 +155,21 @@ export default function BookForm({ businessName }: { businessName: string }) {
         const profile = await liff.getProfile()
         setLineUserId(profile.userId)
         setForm(prev => ({ ...prev, name: prev.name || profile.displayName || '' }))
+
+        // 老客自動帶入上次的基本資料，省去重複輸入
+        try {
+          const r = await fetch(`/api/book/customer?lineUserId=${encodeURIComponent(profile.userId)}`)
+          const c = await r.json()
+          if (c?.returning) {
+            setReturning(true)
+            setForm(prev => ({
+              ...prev,
+              name:  c.name || prev.name,
+              phone: prev.phone || c.phone || '',
+              email: prev.email || c.email || '',
+            }))
+          }
+        } catch {}
       } catch {
         // Booking remains available outside LIFF.
       }
@@ -402,6 +418,9 @@ export default function BookForm({ businessName }: { businessName: string }) {
             {step === 2 && (
               <section>
                 <SectionTitle icon={<User size={17} />} title="填寫聯絡資料" subtitle="手機號碼用於聯繫與確認預約。" />
+                {returning && (
+                  <p className="text-xs" style={{ color: C.success }}>✓ 已透過 LINE 帶入您上次的預約資料，可直接確認或修改。</p>
+                )}
                 <div style={fieldGrid}>
                   <Field icon={<User size={16} />} label="姓名 *" value={form.name} onChange={v => setField('name', v)} placeholder="請輸入您的姓名" />
                   <Field icon={<Phone size={16} />} label="手機號碼 *" value={form.phone} onChange={v => setField('phone', v)} placeholder="09xxxxxxxx" type="tel" />
