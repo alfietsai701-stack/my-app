@@ -1,9 +1,8 @@
-import { SignJWT } from 'jose'
 import { NextRequest, NextResponse } from 'next/server'
 import bcrypt from 'bcryptjs'
 import { prisma } from '@/lib/prisma'
-
-const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET)
+import { signSession, setAuthCookie } from '@/lib/auth-session'
+import type { TokenPayload } from '@/lib/auth-server'
 
 // ── Rate limiting (in-memory, per-instance) ───────────────────────────────────
 // Note: in serverless each instance has its own store — acceptable for a small
@@ -65,23 +64,14 @@ export async function POST(request: NextRequest) {
   // Successful login — clear attempt counter
   attempts.delete(email.toLowerCase())
 
-  const token = await new SignJWT({
+  const token = await signSession({
     id: user.id,
     email: user.email,
     name: user.name,
     permissions: user.permissions,
-  })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setExpirationTime('8h')
-    .sign(secret)
+  } as TokenPayload)
 
   const response = NextResponse.json({ ok: true })
-  response.cookies.set('auth-token', token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 60 * 60 * 8,
-    path: '/',
-  })
+  setAuthCookie(response, token)
   return response
 }

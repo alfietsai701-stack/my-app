@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
 import { prisma } from './prisma'
+import { getBusinessHours, isClosedOn } from './business-hours'
 
 const DEFAULT_SLOTS = ['11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00']
 const BUFFER_MIN    = 60
@@ -37,6 +38,9 @@ export async function getAvailableSlots(
   durationMin: number,
   db: DbClient = prisma,
 ): Promise<string[]> {
+  // 公休日不開放任何時段（週固定公休 + 臨時公休 + 特殊營業日覆蓋）
+  if (isClosedOn(date, await getBusinessHours())) return []
+
   const [y, m, day] = date.split('-').map(Number)
   const start = new Date(y, m - 1, day, 0, 0, 0)
   const end   = new Date(y, m - 1, day, 23, 59, 59)

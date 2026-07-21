@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { serializeCustomer, serializeCustomerDetail } from '@/lib/customer-serializers'
 import { withAuth } from '@/lib/with-auth'
+import { sanitizeTags } from '@/lib/customer-tags'
 
 export const GET = withAuth(async (_: NextRequest, { params }: { params: Promise<{ id: string }> }) => {
   try {
@@ -32,6 +33,7 @@ export const PATCH = withAuth(async (req: NextRequest, { params }: { params: Pro
     if (body.phone    !== undefined) data.phone    = body.phone
     if (body.birthday !== undefined) data.birthday = body.birthday ? new Date(body.birthday) : null
     if (body.note     !== undefined) data.note     = body.note || null
+    if (body.tags     !== undefined) data.tags     = sanitizeTags(body.tags)
     const customer = await prisma.customer.update({
       where: { id },
       data,

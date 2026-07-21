@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import Quiz from './Quiz'
 import type { CSSProperties, ReactNode } from 'react'
 import {
   Calendar,
@@ -70,9 +71,21 @@ function maxDate(): string {
   return toInputDate(new Date(now.getFullYear(), now.getMonth() + 2, 0))
 }
 
-function isWeekend(dateStr: string): boolean {
+type BusinessHours = { closedWeekdays: number[]; closedDates: string[]; openDates: string[] }
+const DEFAULT_HOURS: BusinessHours = { closedWeekdays: [0], closedDates: [], openDates: [] }
+const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
+
+// 與伺服器端 lib/business-hours.ts 的 isClosedOn 邏輯一致
+function isClosed(dateStr: string, hours: BusinessHours): boolean {
+  if (hours.openDates.includes(dateStr)) return false
+  if (hours.closedDates.includes(dateStr)) return true
   const [y, m, d] = dateStr.split('-').map(Number)
-  return new Date(y, m - 1, d).getDay() === 0
+  return hours.closedWeekdays.includes(new Date(y, m - 1, d).getDay())
+}
+
+function closedLabel(hours: BusinessHours): string {
+  if (hours.closedWeekdays.length === 0) return '每日營業'
+  return '週' + hours.closedWeekdays.slice().sort().map(d => WEEKDAY_LABELS[d]).join('、') + '公休'
 }
 
 function formatDate(d: string): string {
@@ -92,14 +105,14 @@ function compactDate(d: string): { day: string; weekday: string; month: string }
   }
 }
 
-function quickDates(): string[] {
+function quickDates(hours: BusinessHours): string[] {
   const result: string[] = []
   const date = new Date()
   date.setDate(date.getDate() + 1)
 
   while (result.length < 7) {
     const value = toInputDate(date)
-    if (!isWeekend(value)) result.push(value)
+    if (!isClosed(value, hours)) result.push(value)
     date.setDate(date.getDate() + 1)
   }
 
@@ -116,6 +129,9 @@ export default function BookForm({ businessName }: { businessName: string }) {
   const [done, setDone] = useState<{ code: string; service: string; date: string; time: string } | null>(null)
   const [error, setError] = useState('')
   const [lineUserId, setLineUserId] = useState('')
+  const [hours, setHours] = useState<BusinessHours>(DEFAULT_HOURS)
+  const [returning, setReturning] = useState(false)
+  const [mode, setMode] = useState<'booking' | 'quiz'>('booking')
   const slotCacheRef = useRef(new Map<string, string[]>())
   const slotRequestRef = useRef(0)
 
@@ -124,6 +140,11 @@ export default function BookForm({ businessName }: { businessName: string }) {
       setServices(data)
       const firstCategory = Object.keys(data)[0]
       if (firstCategory) setForm(prev => prev.category ? prev : { ...prev, category: firstCategory })
+    }).catch(() => {})
+
+    // 公休日設定：改由後台設定驅動，不再寫死週日
+    fetch('/api/book/config').then(r => r.json()).then((h: BusinessHours) => {
+      if (h && Array.isArray(h.closedWeekdays)) setHours(h)
     }).catch(() => {})
 
     const liffId = process.env.NEXT_PUBLIC_LIFF_ID
@@ -136,6 +157,21 @@ export default function BookForm({ businessName }: { businessName: string }) {
         const profile = await liff.getProfile()
         setLineUserId(profile.userId)
         setForm(prev => ({ ...prev, name: prev.name || profile.displayName || '' }))
+
+        // 老客自動帶入上次的基本資料，省去重複輸入
+        try {
+          const r = await fetch(`/api/book/customer?lineUserId=${encodeURIComponent(profile.userId)}`)
+          const c = await r.json()
+          if (c?.returning) {
+            setReturning(true)
+            setForm(prev => ({
+              ...prev,
+              name:  c.name || prev.name,
+              phone: prev.phone || c.phone || '',
+              email: prev.email || c.email || '',
+            }))
+          }
+        } catch {}
       } catch {
         // Booking remains available outside LIFF.
       }
@@ -143,7 +179,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
   }, [])
 
   const loadSlots = useCallback(async (date: string, serviceId: string) => {
-    if (!date || !serviceId || isWeekend(date)) {
+    if (!date || !serviceId || isClosed(date, hours)) {
       setSlots([])
       setSlotsLoading(false)
       return
@@ -173,15 +209,15 @@ export default function BookForm({ businessName }: { businessName: string }) {
     } finally {
       if (slotRequestRef.current === requestId) setSlotsLoading(false)
     }
-  }, [services])
+  }, [services, hours])
 
   const flatServices = useMemo(() => Object.values(services).flat(), [services])
   const selectedService = flatServices.find(s => s.id === form.serviceId)
   const categories = Object.keys(services)
   const visibleServices = form.category ? services[form.category] ?? [] : []
-  const dates = useMemo(() => quickDates(), [])
+  const dates = useMemo(() => quickDates(hours), [hours])
   const step0Valid = !!form.serviceId
-  const step1Valid = !!form.date && !!form.time && !isWeekend(form.date)
+  const step1Valid = !!form.date && !!form.time && !isClosed(form.date, hours)
   const step2Valid = form.name.trim().length >= 2 && /^09\d{8}$/.test(form.phone.replace(/[-\s]/g, ''))
   const isDisabled = (step === 0 && !step0Valid) || (step === 1 && !step1Valid) || (step === 2 && !step2Valid)
 
@@ -204,6 +240,13 @@ export default function BookForm({ businessName }: { businessName: string }) {
     setField('date', d)
     setField('time', '')
     if (d && form.serviceId) loadSlots(d, form.serviceId)
+  }
+
+  function handleQuizPick(category: string, serviceId: string) {
+    setForm(prev => ({ ...prev, category, serviceId, time: '' }))
+    setSlots([])
+    setMode('booking')
+    setStep(0)
   }
 
   async function submit() {
@@ -269,7 +312,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
             <InfoTile label="流程" value="4 步完成" />
             <InfoTile label="預約" value="即時確認" />
             <InfoTile label="通知" value="LINE / Email" />
-            <InfoTile label="營業" value="週日公休" />
+            <InfoTile label="營業" value={closedLabel(hours)} />
           </div>
         </aside>
 
@@ -282,6 +325,17 @@ export default function BookForm({ businessName }: { businessName: string }) {
             <div style={priceHint}>{selectedService ? `NT$ ${selectedService.price.toLocaleString()}` : '選擇服務'}</div>
           </div>
 
+          <div style={modeTabs}>
+            <button onClick={() => setMode('booking')} style={modeTab(mode === 'booking')}>預約</button>
+            <button onClick={() => setMode('quiz')} style={modeTab(mode === 'quiz')}>測驗推薦</button>
+          </div>
+
+          {mode === 'quiz' ? (
+            <div style={content}>
+              <Quiz services={services} onPick={handleQuizPick} />
+            </div>
+          ) : (
+          <>
           <Stepper step={step} />
 
           <div style={content}>
@@ -356,11 +410,11 @@ export default function BookForm({ businessName }: { businessName: string }) {
                   />
                 </label>
 
-                {form.date && isWeekend(form.date) && (
-                  <p style={warningText}>週日公休，請選擇其他日期。</p>
+                {form.date && isClosed(form.date, hours) && (
+                  <p style={warningText}>{closedLabel(hours)}，請選擇其他日期。</p>
                 )}
 
-                {form.date && !isWeekend(form.date) && (
+                {form.date && !isClosed(form.date, hours) && (
                   <div style={{ marginTop: 22 }}>
                     <SectionTitle icon={<Clock size={17} />} title="可預約時段" subtitle={formatDate(form.date)} dense />
                     {slotsLoading ? (
@@ -384,6 +438,9 @@ export default function BookForm({ businessName }: { businessName: string }) {
             {step === 2 && (
               <section>
                 <SectionTitle icon={<User size={17} />} title="填寫聯絡資料" subtitle="手機號碼用於聯繫與確認預約。" />
+                {returning && (
+                  <p className="text-xs" style={{ color: C.success }}>✓ 已透過 LINE 帶入您上次的預約資料，可直接確認或修改。</p>
+                )}
                 <div style={fieldGrid}>
                   <Field icon={<User size={16} />} label="姓名 *" value={form.name} onChange={v => setField('name', v)} placeholder="請輸入您的姓名" />
                   <Field icon={<Phone size={16} />} label="手機號碼 *" value={form.phone} onChange={v => setField('phone', v)} placeholder="09xxxxxxxx" type="tel" />
@@ -437,6 +494,8 @@ export default function BookForm({ businessName }: { businessName: string }) {
               </button>
             )}
           </div>
+          </>
+          )}
         </section>
       </main>
     </div>
@@ -679,6 +738,25 @@ const content: CSSProperties = {
   padding: 24,
   flex: 1,
 }
+
+const modeTabs: CSSProperties = {
+  display: 'flex',
+  gap: 8,
+  padding: '0 24px',
+  marginTop: 4,
+}
+
+const modeTab = (active: boolean): CSSProperties => ({
+  flex: 1,
+  border: `1px solid ${active ? C.accent : C.border}`,
+  background: active ? C.accentBg : 'transparent',
+  color: active ? C.accentH : C.text3,
+  padding: '9px 0',
+  fontSize: 13,
+  fontWeight: 700,
+  cursor: 'pointer',
+  transition: 'background 0.18s, border-color 0.18s, color 0.18s',
+})
 
 const categoryTabs: CSSProperties = {
   display: 'flex',

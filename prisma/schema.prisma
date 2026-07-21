@@ -16,6 +16,7 @@ model Customer {
   lineUserId   String?       @unique
   birthday     DateTime?
   note         String?
+  tags         String[]      @default([])
   createdAt    DateTime      @default(now())
   deletedAt    DateTime?
   appointments Appointment[]

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { MODULE_LABELS, DEFAULT_PERMISSIONS } from '@/lib/permissions'
+import BusinessHoursCard from './BusinessHoursCard'
 import type { Permissions } from '@/lib/permissions'
 
 type AdminUser = { id: string; email: string; name: string; permissions: Permissions; createdAt: string }
@@ -93,6 +94,8 @@ export default function SettingsPage() {
             </tbody>
           </table></div>
         </div>
+
+        <BusinessHoursCard />
       </main>
 
       {editing && (
