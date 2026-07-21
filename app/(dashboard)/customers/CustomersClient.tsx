@@ -112,7 +112,7 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
                 <thead className="sticky top-0 bg-[var(--t-surface)] z-10">
                   <tr className="border-b border-[var(--t-border)]">
                     {['姓名', '電話', '年齡', '預約次數', ''].map((h, i) => (
-                      <th key={i} className={`text-[10px] font-normal text-[var(--t-text-4)] tracking-[0.25em] uppercase py-3 ${i === 0 ? 'text-left px-8' : i === 4 ? 'w-10 px-4' : 'text-right px-8'}`}>{h}</th>
+                      <th key={i} className={`text-[10px] font-normal text-[var(--t-text-4)] tracking-[0.25em] uppercase py-3 ${i <= 1 ? 'text-left px-8' : i === 4 ? 'w-10 px-4' : 'text-right px-8'}`}>{h}</th>
                     ))}
                   </tr>
                 </thead>
