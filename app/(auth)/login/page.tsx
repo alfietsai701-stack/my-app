@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Eye, EyeOff, LogIn, Sparkles } from 'lucide-react'
 
 export default function LoginPage() {
@@ -9,6 +9,21 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    const code = new URLSearchParams(window.location.search).get('error')
+    if (!code) return
+    const map: Record<string, string> = {
+      no_account: '此第三方帳號尚未建立管理員權限，請聯絡系統管理員。',
+      no_email: '無法取得第三方帳號的電子郵件，請改用帳號密碼登入。',
+      invalid_state: '登入逾時或驗證失敗，請重新嘗試。',
+      provider_disabled: '此第三方登入尚未啟用。',
+    }
+    setError(map[code] ?? '第三方登入失敗，請重新嘗試。')
+  }, [])
+
+  const googleEnabled = process.env.NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN === '1'
+  const lineEnabled = process.env.NEXT_PUBLIC_ENABLE_LINE_LOGIN === '1'
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -164,6 +179,32 @@ export default function LoginPage() {
                   {loading ? '登入中…' : '登入'}
                 </button>
               </form>
+
+              {(googleEnabled || lineEnabled) && (
+                <div className="mt-7">
+                  <div className="mb-5 flex items-center gap-3">
+                    <div className="h-px flex-1" style={{ background: '#E4D3BE' }} />
+                    <span className="text-[10px] tracking-[0.2em]" style={{ color: '#9A8A7B' }}>或</span>
+                    <div className="h-px flex-1" style={{ background: '#E4D3BE' }} />
+                  </div>
+                  <div className="space-y-3">
+                    {googleEnabled && (
+                      <a href="/api/auth/oauth/google"
+                        className="flex w-full items-center justify-center gap-2 border py-2.5 text-sm font-medium transition-all hover:bg-[#FAF4EA]"
+                        style={{ borderColor: '#DCC7AA', color: '#33281E' }}>
+                        使用 Google 登入
+                      </a>
+                    )}
+                    {lineEnabled && (
+                      <a href="/api/auth/oauth/line"
+                        className="flex w-full items-center justify-center gap-2 py-2.5 text-sm font-semibold text-white transition-all hover:opacity-90"
+                        style={{ background: '#06C755' }}>
+                        使用 LINE 登入
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
             <p className="mt-5 text-center text-[11px]" style={{ color: '#9A8A7B' }}>
