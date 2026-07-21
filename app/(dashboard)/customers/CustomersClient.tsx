@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Plus, Search, X, ChevronRight } from 'lucide-react'
+import { DEFAULT_CUSTOMER_TAGS } from '@/lib/customer-tags'
 
 type Customer = {
   id: string; name: string; phone: string
-  birthday: string | null; note: string | null; createdAt: string
+  birthday: string | null; note: string | null; tags: string[]; createdAt: string
   _count: { appointments: number }
 }
 type Appointment = {
@@ -15,7 +16,7 @@ type Appointment = {
 }
 type CustomerDetail = Customer & { appointments: Appointment[]; member: { tier: string; points: number } | null }
 
-const EMPTY = { name: '', phone: '', birthday: '', note: '' }
+const EMPTY = { name: '', phone: '', birthday: '', note: '', tags: [] as string[] }
 
 const statusLabel: Record<string, string> = { confirmed: '已確認', completed: '已完成', cancelled: '已取消' }
 const statusStyle: Record<string, string> = {
@@ -37,17 +38,26 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [tagFilter, setTagFilter] = useState('')
+  const [customTag, setCustomTag] = useState('')
 
-  const load = useCallback(async (search = q) => {
-    const res = await fetch(`/api/customers?q=${encodeURIComponent(search)}`)
+  const load = useCallback(async (search = q, tag = tagFilter) => {
+    const res = await fetch(`/api/customers?q=${encodeURIComponent(search)}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`)
     if (res.ok) setCustomers(await res.json())
-  }, [q])
+  }, [q, tagFilter])
 
   useEffect(() => {
     if (!q) return
-    const t = setTimeout(() => load(q), 300)
+    const t = setTimeout(() => load(q, tagFilter), 300)
     return () => clearTimeout(t)
   }, [q])
+
+  // 標籤篩選：切換即重新查詢
+  const firstRender = useRef(true)
+  useEffect(() => {
+    if (firstRender.current) { firstRender.current = false; return }
+    load(q, tagFilter)
+  }, [tagFilter])
 
   async function openDetail(id: string) {
     const res = await fetch(`/api/customers/${id}`)
@@ -55,7 +65,7 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
   }
 
   function openEdit(c: Customer) {
-    setForm({ name: c.name, phone: c.phone, birthday: c.birthday ? c.birthday.slice(0, 10) : '', note: c.note ?? '' })
+    setForm({ name: c.name, phone: c.phone, birthday: c.birthday ? c.birthday.slice(0, 10) : '', note: c.note ?? '', tags: c.tags ?? [] })
     setEditing(true)
   }
 
@@ -76,6 +86,16 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
     if (!confirm(`確定要刪除顧客「${name}」？`)) return
     await fetch(`/api/customers/${id}`, { method: 'DELETE' })
     setDetail(null); load()
+  }
+
+  function toggleTag(t: string) {
+    setForm(f => ({ ...f, tags: f.tags.includes(t) ? f.tags.filter(x => x !== t) : [...f.tags, t] }))
+  }
+  function addCustomTag() {
+    const t = customTag.trim()
+    if (!t) return
+    setForm(f => (f.tags.includes(t) ? f : { ...f, tags: [...f.tags, t] }))
+    setCustomTag('')
   }
 
   return (
@@ -99,6 +119,14 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
                 className="flex-1 bg-transparent text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] focus:outline-none" />
               {q && <button onClick={() => setQ('')}><X size={11} className="text-[var(--t-text-4)] hover:text-[var(--t-text-3)]" /></button>}
             </div>
+            <div className="flex flex-wrap gap-1.5 mt-3">
+              {DEFAULT_CUSTOMER_TAGS.map(t => (
+                <button key={t} onClick={() => setTagFilter(f => (f === t ? '' : t))}
+                  className={`px-2.5 py-0.5 text-[10px] tracking-wide border transition-colors ${tagFilter === t ? 'border-[var(--t-accent)] bg-[var(--t-accent)] text-[var(--t-accent-fg)]' : 'border-[var(--t-border-s)] text-[var(--t-text-3)] hover:border-[var(--t-accent)]'}`}>
+                  {t}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="flex-1 overflow-auto bg-[var(--t-bg)]">
@@ -120,7 +148,16 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
                   {customers.map(c => (
                     <tr key={c.id} onClick={() => openDetail(c.id)}
                       className={`border-b border-[var(--t-border)] last:border-0 cursor-pointer transition-colors ${detail?.id === c.id ? 'bg-[var(--t-bg)]' : 'hover:bg-[var(--t-bg)]'}`}>
-                      <td className="px-8 py-4 text-sm font-light text-[var(--t-text)] tracking-wide">{c.name}</td>
+                      <td className="px-8 py-4">
+                        <span className="text-sm font-light text-[var(--t-text)] tracking-wide">{c.name}</span>
+                        {c.tags?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {c.tags.slice(0, 3).map(t => (
+                              <span key={t} className="text-[9px] tracking-wide text-[var(--t-accent)] border border-[var(--t-accent-bg)] px-1.5 py-0.5">{t}</span>
+                            ))}
+                          </div>
+                        )}
+                      </td>
                       <td className="px-8 py-4 text-xs text-[var(--t-text-3)] tabular-nums tracking-wide">{c.phone}</td>
                       <td className="px-8 py-4 text-right text-xs text-[var(--t-text-3)]">{c.birthday ? `${age(c.birthday)} 歲` : '—'}</td>
                       <td className="px-8 py-4 text-right text-xs text-[var(--t-text-3)] tabular-nums">{c._count.appointments}</td>
@@ -167,6 +204,16 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
                     </div>
                   ))}
                 </div>
+                {detail.tags?.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-[var(--t-border)]">
+                    <p className="text-[10px] text-[var(--t-text-4)] tracking-[0.2em] uppercase mb-2">標籤</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {detail.tags.map(t => (
+                        <span key={t} className="text-[10px] tracking-wide text-[var(--t-accent)] border border-[var(--t-accent-bg)] px-2 py-0.5">{t}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Appointments */}
@@ -229,6 +276,28 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
                     className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors" />
                 </div>
               ))}
+              <div>
+                <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">標籤</label>
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {[...new Set<string>([...DEFAULT_CUSTOMER_TAGS, ...form.tags])].map(t => {
+                    const on = form.tags.includes(t)
+                    return (
+                      <button key={t} type="button" onClick={() => toggleTag(t)}
+                        className={`px-2.5 py-1 text-[11px] tracking-wide border transition-colors ${on ? 'border-[var(--t-accent)] bg-[var(--t-accent)] text-[var(--t-accent-fg)]' : 'border-[var(--t-border-s)] text-[var(--t-text-3)] hover:border-[var(--t-accent)]'}`}>
+                        {t}
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="flex items-center gap-2">
+                  <input value={customTag} onChange={e => setCustomTag(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag() } }}
+                    placeholder="自訂標籤"
+                    className="flex-1 bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-1.5 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors" />
+                  <button type="button" onClick={addCustomTag} disabled={!customTag.trim()}
+                    className="text-[10px] tracking-[0.2em] uppercase text-[var(--t-text-3)] hover:text-[var(--t-accent)] disabled:opacity-40 transition-colors">＋ 新增</button>
+                </div>
+              </div>
             </div>
             <button onClick={handleSave} disabled={saving}
               className="w-full mt-8 border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] disabled:opacity-40 py-2.5 text-[10px] tracking-[0.25em] uppercase transition-all duration-200">
