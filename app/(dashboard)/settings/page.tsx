@@ -1,19 +1,29 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { Plus, X } from 'lucide-react'
 import { MODULE_LABELS, DEFAULT_PERMISSIONS } from '@/lib/permissions'
-import BusinessHoursCard from './BusinessHoursCard'
+import { VISIT_LIGHT_DAYS, VISIT_LIGHT_LABEL, type VisitLightLevel } from '@/lib/visit-lights'
 import type { Permissions } from '@/lib/permissions'
+import BusinessHoursCard from './BusinessHoursCard'
+import { SettingsCard } from './SettingsCard'
+import {
+  PageHeader, Tag, LightDot, Modal, FormField,
+  btnPrimary, btnOutline, btnDanger, btnText, inputCls,
+} from '@/components/ui/kit'
 
 type AdminUser = { id: string; email: string; name: string; permissions: Permissions; createdAt: string }
 const MODULES = Object.keys(DEFAULT_PERMISSIONS) as (keyof Permissions)[]
+const LIGHT_LEVELS: VisitLightLevel[] = ['green', 'yellow', 'red']
+const EMPTY_USER = { email: '', password: '', name: '', permissions: { ...DEFAULT_PERMISSIONS } }
 
 export default function SettingsPage() {
   const [users, setUsers] = useState<AdminUser[]>([])
   const [editing, setEditing] = useState<AdminUser | null>(null)
   const [adding, setAdding] = useState(false)
-  const [newUser, setNewUser] = useState({ email: '', password: '', name: '', permissions: { ...DEFAULT_PERMISSIONS } })
+  const [newUser, setNewUser] = useState(EMPTY_USER)
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   async function load() {
     const res = await fetch('/api/admin/accounts')
@@ -32,147 +42,181 @@ export default function SettingsPage() {
   }
 
   async function addUser() {
-    setSaving(true)
+    setSaving(true); setError('')
     const res = await fetch('/api/admin/accounts', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newUser),
     })
     setSaving(false)
-    if (res.ok) { setAdding(false); setNewUser({ email: '', password: '', name: '', permissions: { ...DEFAULT_PERMISSIONS } }); load() }
+    if (res.ok) { setAdding(false); setNewUser(EMPTY_USER); load() }
+    else setError((await res.json().catch(() => null))?.error ?? '建立失敗，請再試一次')
   }
 
   async function deleteUser(id: string, name: string) {
     if (!confirm(`確定要刪除 ${name}？`)) return
-    await fetch(`/api/admin/accounts/${id}`, { method: 'DELETE' }); load()
+    await fetch(`/api/admin/accounts/${id}`, { method: 'DELETE' })
+    setEditing(null); load()
   }
 
   const togglePerm = (p: Permissions, k: keyof Permissions): Permissions => ({ ...p, [k]: !p[k] })
 
   return (
-    <div className="flex flex-col flex-1 overflow-hidden">
-      <header className="h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-center justify-between px-8 shrink-0">
-        <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-3)] uppercase">系統設定</p>
-        <button onClick={() => setAdding(true)}
-          className="border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">
-          新增帳號
-        </button>
-      </header>
+    <div className="flex flex-1 flex-col overflow-hidden" style={{ background: 'var(--t-bg)' }}>
+      <PageHeader title="設定" />
 
-      <main className="flex-1 bg-[var(--t-bg)] p-4 lg:p-8 overflow-auto">
-        <div className="bg-[var(--t-surface)] border border-[var(--t-border)]">
-          <div className="px-8 py-5 border-b border-[var(--t-border)]">
-            <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-2)] uppercase">管理員帳號</p>
-          </div>
-          <div className="overflow-x-auto"><table className="w-full min-w-[560px]">
-            <thead>
-              <tr className="border-b border-[var(--t-border)]">
-                {['姓名', '帳號', '功能權限', ''].map((h, i) => (
-                  <th key={i} className="text-left text-[10px] font-normal text-[var(--t-text-4)] tracking-[0.25em] uppercase px-8 py-3">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id} className="border-b border-[var(--t-border)] last:border-0 hover:bg-[var(--t-bg)] transition-colors">
-                  <td className="px-8 py-4 text-sm font-light text-[var(--t-text)] tracking-wide whitespace-nowrap">{u.name}</td>
-                  <td className="px-8 py-4 text-xs text-[var(--t-text-3)] tracking-wide">{u.email}</td>
-                  <td className="px-8 py-4">
-                    <div className="flex flex-wrap gap-2">
-                      {MODULES.filter(k => u.permissions[k]).map(k => (
-                        <span key={k} className="border border-[var(--t-accent-bg)] text-[var(--t-accent)] px-2.5 py-0.5 text-[10px] tracking-wide">
-                          {MODULE_LABELS[k]}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="px-8 py-4 text-right whitespace-nowrap">
-                    <button onClick={() => setEditing(u)} className="text-[10px] tracking-wide text-[var(--t-text-3)] hover:text-[var(--t-accent)] mr-5 transition-colors">編輯</button>
-                    <button onClick={() => deleteUser(u.id, u.name)} className="text-[10px] tracking-wide text-[var(--t-text-3)] hover:text-[#A05050] transition-colors">刪除</button>
-                  </td>
-                </tr>
+      <main className="flex-1 overflow-auto px-4 pb-4 pt-3 lg:px-5 lg:pb-5">
+        {/* 左：營業日（佔兩列高）；右：可預約時段、回訪燈號；下：帳號橫跨整列 */}
+        <div className="grid grid-cols-1 items-stretch gap-4 lg:grid-cols-2">
+          <BusinessHoursCard className="lg:row-span-2" />
+          <SlotsCard />
+
+          <SettingsCard title="回訪燈號" hint="顧客多久沒來，就在顧客頁亮燈提醒">
+            <div className="flex flex-col">
+              {LIGHT_LEVELS.map(level => (
+                <div key={level} className="flex min-h-12 items-center justify-between gap-3 border-b border-line-soft text-sm last:border-0">
+                  <span className="flex items-center gap-2.5 text-ink">
+                    <LightDot level={level} size={14} />{VISIT_LIGHT_LABEL[level]}
+                  </span>
+                  <span className="text-ink-soft">超過 <span className="num text-xl font-semibold text-ink">{VISIT_LIGHT_DAYS[level]}</span> 天沒來</span>
+                </div>
               ))}
-            </tbody>
-          </table></div>
-        </div>
+            </div>
+            <p className="text-xs text-ink-muted">天數目前固定。之後需要可以改成在這裡調整。</p>
+          </SettingsCard>
 
-        <BusinessHoursCard />
+          <SettingsCard title="帳號" hint="誰可以登入後台、能看哪些頁面" className="lg:col-span-2"
+            action={<button onClick={() => { setError(''); setNewUser(EMPTY_USER); setAdding(true) }} className={btnOutline}>
+              <Plus size={16} strokeWidth={1.8} />新增帳號
+            </button>}>
+            <div className="flex flex-col">
+              {users.length === 0 && <p className="py-2 text-[13px] text-ink-muted">載入中…</p>}
+              {users.map(u => (
+                <div key={u.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line-soft py-3 last:border-0">
+                  <span className="flex min-w-[160px] flex-col gap-0.5">
+                    <span className="text-[15px] font-medium text-ink">{u.name}</span>
+                    <span className="text-xs text-ink-muted">{u.email}</span>
+                  </span>
+                  <span className="flex flex-1 flex-wrap gap-1.5">
+                    {MODULES.filter(k => u.permissions[k]).map(k => <Tag key={k} kind="sage">{MODULE_LABELS[k]}</Tag>)}
+                  </span>
+                  <button onClick={() => setEditing(u)} className={btnText}>編輯</button>
+                </div>
+              ))}
+            </div>
+          </SettingsCard>
+        </div>
       </main>
 
       {editing && (
-        <Modal title={`編輯帳號`} onClose={() => setEditing(null)}>
-          <FieldLabel>姓名</FieldLabel>
-          <UnderlineInput value={editing.name} onChange={v => setEditing({ ...editing, name: v })} className="mb-6" />
-          <FieldLabel>功能權限</FieldLabel>
-          <div className="space-y-3 mb-8">
-            {MODULES.map(k => <Check key={k} label={MODULE_LABELS[k]} checked={editing.permissions[k]} onChange={() => setEditing({ ...editing, permissions: togglePerm(editing.permissions, k) })} />)}
-          </div>
-          <OutlineBtn onClick={saveEdit} loading={saving}>儲存變更</OutlineBtn>
+        <Modal title="編輯帳號" onClose={() => setEditing(null)}
+          footer={<>
+            <button onClick={() => deleteUser(editing.id, editing.name)} className={btnDanger}>刪除</button>
+            <button onClick={saveEdit} disabled={saving} className={`${btnPrimary} h-[50px] flex-1`}>{saving ? '儲存中' : '儲存變更'}</button>
+          </>}>
+          <FormField label="姓名" htmlFor="acc-name">
+            <input id="acc-name" value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} className={inputCls} />
+          </FormField>
+          <PermissionPicker value={editing.permissions} onToggle={k => setEditing({ ...editing, permissions: togglePerm(editing.permissions, k) })} />
         </Modal>
       )}
 
       {adding && (
-        <Modal title="新增帳號" onClose={() => setAdding(false)}>
-          {([['name','姓名'],['email','帳號（Email）'],['password','初始密碼']] as const).map(([f, l]) => (
-            <div key={f} className="mb-5">
-              <FieldLabel>{l}</FieldLabel>
-              <UnderlineInput type={f === 'password' ? 'password' : 'text'} value={newUser[f as 'name'|'email'|'password']} onChange={v => setNewUser({ ...newUser, [f]: v })} />
-            </div>
+        <Modal title="新增帳號" onClose={() => setAdding(false)}
+          footer={<button onClick={addUser} disabled={saving || !newUser.email || !newUser.password || !newUser.name}
+            className={`${btnPrimary} h-[50px] flex-1`}>{saving ? '建立中' : '建立帳號'}</button>}>
+          {([['name', '姓名', 'text'], ['email', '帳號（Email）', 'email'], ['password', '初始密碼', 'password']] as const).map(([f, l, type]) => (
+            <FormField key={f} label={l} htmlFor={`acc-new-${f}`}>
+              <input id={`acc-new-${f}`} type={type} value={newUser[f]} onChange={e => setNewUser({ ...newUser, [f]: e.target.value })} className={inputCls} />
+            </FormField>
           ))}
-          <FieldLabel className="mt-6">功能權限</FieldLabel>
-          <div className="space-y-3 mb-8">
-            {MODULES.map(k => <Check key={k} label={MODULE_LABELS[k]} checked={newUser.permissions[k]} onChange={() => setNewUser({ ...newUser, permissions: togglePerm(newUser.permissions, k) })} />)}
-          </div>
-          <OutlineBtn onClick={addUser} loading={saving}>建立帳號</OutlineBtn>
+          <PermissionPicker value={newUser.permissions} onToggle={k => setNewUser({ ...newUser, permissions: togglePerm(newUser.permissions, k) })} />
+          {error && <p role="alert" className="rounded-lg bg-visit-red-bg px-3.5 py-2.5 text-[13px] text-visit-red-ink">{error}</p>}
         </Modal>
       )}
     </div>
   )
 }
 
-function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
+function PermissionPicker({ value, onToggle }: { value: Permissions; onToggle: (k: keyof Permissions) => void }) {
   return (
-    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-[var(--t-surface)] border border-[var(--t-border)] w-full max-w-sm p-8 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-8">
-          <p className="text-[10px] tracking-[0.3em] text-[var(--t-text-2)] uppercase">{title}</p>
-          <button onClick={onClose} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none transition-colors">×</button>
+    <FormField label="可以使用的頁面">
+      <div className="flex flex-wrap gap-2">
+        {MODULES.map(k => {
+          const on = value[k]
+          return (
+            <button key={k} type="button" onClick={() => onToggle(k)} aria-pressed={on}
+              className={`h-11 rounded-full px-4 text-[13px] transition-colors ${
+                on ? 'bg-ink text-paper' : 'border border-border-input text-ink hover:bg-surface-muted'
+              }`}>
+              {MODULE_LABELS[k]}
+            </button>
+          )
+        })}
+      </div>
+    </FormField>
+  )
+}
+
+/** 可預約時段：客人在預約頁能選的開始時間 */
+function SlotsCard() {
+  const [slots, setSlots] = useState<string[]>([])
+  const [loaded, setLoaded] = useState(false)
+  const [newSlot, setNewSlot] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    fetch('/api/settings/slots')
+      .then(r => r.json())
+      .then((d: { slots?: string[] }) => { if (Array.isArray(d?.slots)) setSlots(d.slots) })
+      .catch(() => {})
+      .finally(() => setLoaded(true))
+  }, [])
+
+  function add() {
+    if (!/^\d{2}:\d{2}$/.test(newSlot) || slots.includes(newSlot)) { setNewSlot(''); return }
+    setSlots(s => [...s, newSlot].sort()); setNewSlot(''); setDirty(true); setMessage('')
+  }
+  function remove(t: string) { setSlots(s => s.filter(x => x !== t)); setDirty(true); setMessage('') }
+
+  async function save() {
+    setSaving(true)
+    const res = await fetch('/api/settings/slots', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ slots }),
+    })
+    setSaving(false)
+    if (res.ok) { setDirty(false); setMessage('已儲存') }
+    else setMessage((await res.json().catch(() => null))?.error ?? '儲存失敗')
+  }
+
+  return (
+    <SettingsCard title="可預約時段" hint="客人在預約頁能選的開始時間"
+      footer={<>
+        <button onClick={save} disabled={saving || !dirty} className={btnPrimary}>{saving ? '儲存中' : '儲存'}</button>
+        <span className="text-xs text-ink-muted">{dirty ? '有尚未儲存的變更' : message}</span>
+      </>}>
+      {!loaded ? (
+        <p className="text-[13px] text-ink-muted">載入中…</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {slots.length === 0 && <span className="text-[13px] text-ink-muted">還沒有設定時段。</span>}
+          {slots.map(t => (
+            <span key={t} className="inline-flex h-10 items-center gap-0.5 rounded-full bg-surface-muted pl-3.5 pr-1">
+              <span className="num text-lg font-semibold text-ink">{t}</span>
+              <button onClick={() => remove(t)} aria-label={`移除 ${t}`}
+                className="flex size-8 items-center justify-center rounded-full text-ink-muted hover:bg-line-soft hover:text-ink">
+                <X size={14} />
+              </button>
+            </span>
+          ))}
         </div>
-        {children}
+      )}
+      <div className="flex items-center gap-2">
+        <input type="time" step={1800} value={newSlot} onChange={e => setNewSlot(e.target.value)}
+          aria-label="新增時段" className={`${inputCls} flex-1`} />
+        <button onClick={add} disabled={!newSlot} className={btnOutline}>加入</button>
       </div>
-    </div>
-  )
-}
-
-function FieldLabel({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <p className={`text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 ${className}`}>{children}</p>
-}
-
-function UnderlineInput({ value, onChange, type = 'text', className = '' }: { value: string; onChange: (v: string) => void; type?: string; className?: string }) {
-  return (
-    <input type={type} value={value} onChange={e => onChange(e.target.value)}
-      className={`w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] transition-colors ${className}`}
-    />
-  )
-}
-
-function Check({ label, checked, onChange }: { label: string; checked: boolean; onChange: () => void }) {
-  return (
-    <label className="flex items-center gap-3 cursor-pointer" onClick={onChange}>
-      <div className={`w-3.5 h-3.5 border flex items-center justify-center transition-colors flex-shrink-0 ${
-        checked ? 'border-[var(--t-accent)] bg-[var(--t-accent)]' : 'border-[var(--t-border-s)]'
-      }`}>
-        {checked && <svg width="7" height="5" viewBox="0 0 7 5" fill="none"><path d="M1 2.5L2.8 4.2L6 1" stroke="var(--t-accent-fg)" strokeWidth="1.2" strokeLinecap="round"/></svg>}
-      </div>
-      <span className="text-xs text-[var(--t-text-2)] tracking-wide">{label}</span>
-    </label>
-  )
-}
-
-function OutlineBtn({ children, onClick, loading }: { children: React.ReactNode; onClick: () => void; loading: boolean }) {
-  return (
-    <button onClick={onClick} disabled={loading}
-      className="w-full border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] disabled:opacity-40 py-2.5 text-[10px] tracking-[0.25em] uppercase transition-all duration-200">
-      {loading ? '處理中' : children}
-    </button>
+    </SettingsCard>
   )
 }

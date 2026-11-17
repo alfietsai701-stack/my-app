@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Image from 'next/image'
 import Quiz from './Quiz'
+import { serviceDescription, BOOKING_NOTICE } from '@/lib/booking-content'
 import { Check, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 
 type Service = { id: string; name: string; price: number; durationMin: number; category: string }
@@ -121,6 +122,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
   const [hours, setHours] = useState<BusinessHours>(DEFAULT_HOURS)
   const [returning, setReturning] = useState(false)
   const [mode, setMode] = useState<'booking' | 'quiz'>('booking')
+  const [agreed, setAgreed] = useState(false)
   const slotCacheRef = useRef(new Map<string, string[]>())
   const slotRequestRef = useRef(0)
 
@@ -246,7 +248,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
   }
 
   async function submit() {
-    if (!step2Valid || !step0Valid || !step1Valid) return
+    if (!step2Valid || !step0Valid || !step1Valid || !agreed) return
     setSubmitting(true)
     setError('')
     try {
@@ -358,6 +360,9 @@ export default function BookForm({ businessName }: { businessName: string }) {
                   <div key={svc.id} className="flex items-center gap-3 rounded-2xl bg-surface p-4">
                     <div className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <span className="font-heading text-[17px] font-semibold text-ink">{svc.name}</span>
+                      {serviceDescription(svc.name) && (
+                        <span className="text-[13px] leading-relaxed text-ink-soft">{serviceDescription(svc.name)}</span>
+                      )}
                       <span className="text-xs text-ink-muted">{svc.category}・{svc.durationMin} 分鐘</span>
                       <span className="num text-[21px] font-semibold leading-tight text-ink">NT$ {svc.price.toLocaleString()}</span>
                     </div>
@@ -529,13 +534,33 @@ export default function BookForm({ businessName }: { businessName: string }) {
             <p className="px-1.5 text-[13px] leading-relaxed text-ink-soft">預約前一天會用 LINE 提醒你。</p>
           )}
 
+          <section aria-labelledby="bk-notice-title" className="flex flex-col gap-3 rounded-xl bg-surface px-[18px] py-4">
+            <h2 id="bk-notice-title" className="font-heading text-[17px] font-semibold tracking-[0.15em] text-ink">{BOOKING_NOTICE.title}</h2>
+            <p className="text-[13px] leading-relaxed text-ink-soft">{BOOKING_NOTICE.intro}</p>
+            <ul className="flex flex-col">
+              {BOOKING_NOTICE.items.map(item => (
+                <li key={item} className="flex gap-2.5 border-b border-dashed border-border-input py-2.5 text-[13px] leading-relaxed text-ink last:border-0">
+                  <span aria-hidden="true" className="shrink-0 text-ink-muted">✧</span>{item}
+                </li>
+              ))}
+            </ul>
+            <p className="text-[13px] leading-relaxed text-ink-muted">{BOOKING_NOTICE.closing}</p>
+            <label className={`flex min-h-[52px] cursor-pointer items-center gap-3 rounded-lg px-3.5 py-2.5 text-sm transition-colors ${
+              agreed ? 'bg-sage-fresh text-ink' : 'bg-surface-muted text-ink'
+            }`}>
+              <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)}
+                className="size-5 shrink-0 cursor-pointer accent-[#1C1C1A]" />
+              <span className="font-medium">{BOOKING_NOTICE.agree}</span>
+            </label>
+          </section>
+
           {error && (
             <p role="alert" className="rounded-lg bg-visit-red-bg px-4 py-3 text-sm text-visit-red-ink">{error}</p>
           )}
 
-          <button onClick={submit} disabled={submitting}
+          <button onClick={submit} disabled={submitting || !agreed}
             className="mt-auto flex h-[54px] shrink-0 items-center justify-center gap-2 rounded-full bg-ink text-base font-medium tracking-[0.25em] text-paper transition-colors hover:bg-ink-soft disabled:opacity-60">
-            {submitting ? <><Loader2 size={18} className="animate-spin" />送出中</> : '送出預約'}
+            {submitting ? <><Loader2 size={18} className="animate-spin" />送出中</> : agreed ? '送出預約' : '請先勾選同意預約須知'}
           </button>
         </div>
       )}

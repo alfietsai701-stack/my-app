@@ -1,6 +1,7 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import { serviceDescription } from '@/lib/booking-content'
 import { ChevronRight, RotateCcw } from 'lucide-react'
 
 type Service = { id: string; name: string; price: number; durationMin: number; category: string }
@@ -60,7 +61,7 @@ function recommend(services: ServiceMap, answers: Option[]): { category: string;
   const [min, max] = budgetRange(answers[2]?.keywords ?? [])
 
   const scored = all.map(item => {
-    const hay = `${item.service.name} ${item.category}`.toLowerCase()
+    const hay = `${item.service.name} ${item.category} ${serviceDescription(item.service.name) ?? ''}`.toLowerCase()
     let score = 0
     answers[0]?.keywords.forEach(k => { if (hay.includes(k.toLowerCase())) score += 2 })
     answers[1]?.keywords.forEach(k => { if (hay.includes(k.toLowerCase())) score += 1 })
@@ -112,6 +113,7 @@ export default function Quiz({ services, onPick }: {
                 <div className="flex min-w-0 flex-col gap-1">
                   {i === 0 && <span className="text-xs font-bold text-visit-green-ink">最推薦</span>}
                   <span className="font-heading text-base font-semibold text-ink">{service.name}</span>
+                  {serviceDescription(service.name) && <span className="text-[13px] leading-relaxed text-ink-soft">{serviceDescription(service.name)}</span>}
                   <span className="text-xs text-ink-muted">{category}・{service.durationMin} 分鐘・NT$ {service.price.toLocaleString()}</span>
                 </div>
                 <span className="flex h-11 shrink-0 items-center gap-1 rounded-full bg-ink px-4 text-[13px] text-paper">預約<ChevronRight size={14} /></span>
