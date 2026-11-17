@@ -7,9 +7,10 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-noto-sans-tc), 'Noto Sans TC', 'PingFang TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-noto-serif-tc), 'Noto Serif TC', 'Songti TC', serif;
+  --font-numeric: var(--font-cormorant), 'Cormorant Garamond', var(--font-noto-serif-tc), serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -39,122 +40,117 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+
+  /* 白紙墨線 design tokens（對應設計系統 tokens.json） */
+  --color-paper: #F5F5F0;
+  --color-canvas: #EDEDE7;
+  --color-surface: #FFFFFF;
+  --color-surface-muted: #F4F4EF;
+  --color-ink: #1C1C1A;
+  --color-ink-soft: #3A3A36;
+  --color-ink-muted: #5C5C56;
+  --color-ink-faint: #6B6B64;
+  --color-line: #E3E3DC;
+  --color-line-soft: #ECECE6;
+  --color-border-input: #D3D3CB;
+  --color-sage: #4F6352;
+  --color-sage-tint: #E4EAE2;
+  --color-sage-fresh: #DDE6DA;
+  --color-sage-mid: #6F8572;
+  --color-sage-soft: #C9D2C6;
+  --color-status-confirmed: #B9C9B5;
+  --color-status-done: #DCDCD5;
+  --color-warn-bg: #F1E7CF;
+  --color-warn-ink: #3D2C0C;
+  --color-visit-green: #4E8A57;
+  --color-visit-green-bg: #DDEBDD;
+  --color-visit-green-ink: #1F3B24;
+  --color-visit-yellow: #D4A12A;
+  --color-visit-yellow-bg: #F5E7BF;
+  --color-visit-yellow-ink: #4A3505;
+  --color-visit-red: #A8402F;
+  --color-visit-red-bg: #F2D5CF;
+  --color-visit-red-ink: #5A1A10;
+
+  /* 圓角四級：10 日曆色塊／14 輸入框與子卡／22 卡片／膠囊用 rounded-full */
+  --radius-sm: 10px;
+  --radius-md: 12px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+  --radius-2xl: 22px;
+  --radius-3xl: 28px;
+  --radius-4xl: 34px;
 }
 
 :root {
-  /* shadcn CSS variables — luxe cream */
-  --background: #F8F1E6;
-  --foreground: #33281E;
-  --card: #FFFDFC;
-  --card-foreground: #33281E;
-  --popover: #FFFDFC;
-  --popover-foreground: #33281E;
-  --primary: #B99868;
-  --primary-foreground: #FFFFFF;
-  --secondary: #FAF4EA;
-  --secondary-foreground: #5E4C3D;
-  --muted: #FAF4EA;
-  --muted-foreground: #76685B;
-  --accent: #B99868;
-  --accent-foreground: #FFFFFF;
-  --destructive: #B85C50;
-  --border: #E4D3BE;
-  --input: #FAF4EA;
-  --ring: #B99868;
-  --chart-1: #B99868;
-  --chart-2: #7E6047;
-  --chart-3: #C98F82;
-  --chart-4: #8E8B63;
-  --chart-5: #B85C50;
+  /* shadcn CSS variables — 白紙墨線 */
+  --background: #F5F5F0;
+  --foreground: #1C1C1A;
+  --card: #FFFFFF;
+  --card-foreground: #1C1C1A;
+  --popover: #FFFFFF;
+  --popover-foreground: #1C1C1A;
+  --primary: #1C1C1A;
+  --primary-foreground: #F5F5F0;
+  --secondary: #F4F4EF;
+  --secondary-foreground: #1C1C1A;
+  --muted: #F4F4EF;
+  --muted-foreground: #5C5C56;
+  --accent: #E4EAE2;
+  --accent-foreground: #26332A;
+  --destructive: #A8402F;
+  --border: #E3E3DC;
+  --input: #D3D3CB;
+  --ring: #4F6352;
+  --chart-1: #1C1C1A;
+  --chart-2: #6F8572;
+  --chart-3: #C9D2C6;
+  --chart-4: #4F6352;
+  --chart-5: #D4A12A;
   --radius: 0.875rem;
-  --sidebar: #FFFDFC;
-  --sidebar-foreground: #33281E;
-  --sidebar-primary: #B99868;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #FAF4EA;
-  --sidebar-accent-foreground: #5E4C3D;
-  --sidebar-border: #E4D3BE;
-  --sidebar-ring: #B99868;
-}
+  --sidebar: #F7F7F3;
+  --sidebar-foreground: #1C1C1A;
+  --sidebar-primary: #1C1C1A;
+  --sidebar-primary-foreground: #F5F5F0;
+  --sidebar-accent: #E4EAE2;
+  --sidebar-accent-foreground: #26332A;
+  --sidebar-border: #E3E3DC;
+  --sidebar-ring: #4F6352;
 
-/* ── Luxe cream design tokens ─────────────────── */
-.light {
+  /* ── 後台既有頁面沿用的 --t-* 變數，改指到白紙墨線 ── */
   /* Backgrounds */
-  --t-bg:         #F8F1E6;
-  --t-surface:    #FFFDFC;
-  --t-elevated:   #FAF4EA;
-  --t-sidebar:    #FFFDFC;
+  --t-bg:         #EDEDE7;
+  --t-surface:    #FFFFFF;
+  --t-elevated:   #F4F4EF;
+  --t-sidebar:    #F7F7F3;
 
   /* Borders */
-  --t-border:     #E4D3BE;
-  --t-border-s:   #DCC7AA;
+  --t-border:     #E3E3DC;
+  --t-border-s:   #D3D3CB;
 
   /* Text */
-  --t-text:       #33281E;
-  --t-text-2:     #5E4C3D;
-  --t-text-3:     #76685B;
-  --t-text-4:     #9A8A7B;
+  --t-text:       #1C1C1A;
+  --t-text-2:     #3A3A36;
+  --t-text-3:     #5C5C56;
+  --t-text-4:     #6B6B64;
 
-  /* Champagne accent */
-  --t-accent:     #B99868;
-  --t-accent-h:   #9B744A;
-  --t-accent-bg:  rgba(185, 152, 104, 0.14);
-  --t-accent-fg:  #FFFFFF;
-
-  /* Semantic */
-  --t-success:    #6F8F74;
-  --t-success-bg: rgba(111, 143, 116, 0.12);
-  --t-warning:    #B8842B;
-  --t-warning-bg: rgba(184, 132, 43, 0.12);
-  --t-danger:     #B85C50;
-  --t-danger-bg:  rgba(184, 92, 80, 0.10);
-
-  --t-glow:       rgba(185, 152, 104, 0.16);
-  --t-shadow:     0 1px 3px rgba(51, 40, 30, 0.08), 0 1px 2px rgba(51, 40, 30, 0.04);
-  --t-shadow-md:  0 4px 14px rgba(51, 40, 30, 0.12), 0 2px 4px rgba(51, 40, 30, 0.06);
-}
-
-.dark {
-  /* Backgrounds */
-  --t-bg:         #241A12;
-  --t-surface:    #33251B;
-  --t-elevated:   #3B2D22;
-  --t-sidebar:    #281D15;
-
-  /* Borders */
-  --t-border:     #4A3728;
-  --t-border-s:   #5B4633;
-
-  /* Text */
-  --t-text:       #FFF8EF;
-  --t-text-2:     #E6D4BC;
-  --t-text-3:     #C3A985;
-  --t-text-4:     #8F7658;
-
-  /* Champagne accent */
-  --t-accent:     #D4B27B;
-  --t-accent-h:   #E6C894;
-  --t-accent-bg:  rgba(212, 178, 123, 0.14);
-  --t-accent-fg:  #FFFFFF;
+  /* 主色＝墨黑（按鈕、選中）；淡底＝鼠尾草綠 */
+  --t-accent:     #1C1C1A;
+  --t-accent-h:   #3A3A36;
+  --t-accent-bg:  #E4EAE2;
+  --t-accent-fg:  #F5F5F0;
 
   /* Semantic */
-  --t-success:    #A9BE8C;
-  --t-success-bg: rgba(169, 190, 140, 0.12);
-  --t-warning:    #E0B668;
-  --t-warning-bg: rgba(224, 182, 104, 0.12);
-  --t-danger:     #E08F82;
-  --t-danger-bg:  rgba(224, 143, 130, 0.12);
+  --t-success:    #2F6B3A;
+  --t-success-bg: #DDEBDD;
+  --t-warning:    #6B4A0A;
+  --t-warning-bg: #F1E7CF;
+  --t-danger:     #8F3323;
+  --t-danger-bg:  #F2D5CF;
 
-  --t-glow:       rgba(212, 178, 123, 0.10);
-  --t-shadow:     0 1px 3px rgba(0, 0, 0, 0.30);
-  --t-shadow-md:  0 4px 12px rgba(0, 0, 0, 0.40);
+  --t-glow:       rgba(79, 99, 82, 0.16);
+  --t-shadow:     0 1px 2px rgba(28, 28, 26, 0.03);
+  --t-shadow-md:  0 12px 40px rgba(28, 28, 26, 0.14), 0 2px 6px rgba(28, 28, 26, 0.05);
 }
 /* ───────────────────────────────────────────────────── */
 
@@ -164,7 +160,7 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-inter, 'Inter'), 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-sans);
     line-height: 1.6;
     letter-spacing: 0.01em;
   }
@@ -175,12 +171,17 @@
     line-height: 1.35;
     font-weight: 600;
   }
+  /* 標題用襯線體，帶一點字距——白紙墨線的主要個性 */
+  h1, h2 {
+    font-family: var(--font-heading);
+    letter-spacing: 0.04em;
+  }
   :where(button, input, textarea, select, a):focus {
     outline: none;
   }
   :where(button, input, textarea, select, a):focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(185, 152, 104, 0.22);
+    box-shadow: 0 0 0 3px rgba(79, 99, 82, 0.32);
   }
   :where(button, input, textarea, select, a) {
     -webkit-tap-highlight-color: transparent;
@@ -188,89 +189,64 @@
 }
 
 /* ── Utility classes ── */
+/* 數字（時間、價格、統計）用 Cormorant Garamond */
+.num {
+  font-family: var(--font-numeric);
+  font-variant-numeric: lining-nums;
+  letter-spacing: 0;
+}
+
 .cube-card {
   background: var(--t-surface);
-  border-radius: 16px;
-  box-shadow: var(--t-shadow);
+  border-radius: 22px;
 }
 
 .cube-card-md {
   background: var(--t-surface);
-  border-radius: 12px;
-  box-shadow: var(--t-shadow);
+  border-radius: 14px;
 }
 
 .cube-btn-primary {
   background: var(--t-accent);
   color: var(--t-accent-fg);
-  border-radius: 10px;
+  border-radius: 999px;
   font-weight: 500;
-  transition: background 0.15s, transform 0.1s;
+  transition: background 0.2s ease;
 }
 .cube-btn-primary:hover {
   background: var(--t-accent-h);
 }
-.cube-btn-primary:active {
-  transform: scale(0.98);
-}
 
 .cube-btn-ghost {
-  color: var(--t-accent);
-  border: 1.5px solid var(--t-accent);
-  border-radius: 10px;
+  color: var(--t-text);
+  border: 1px solid var(--t-border-s);
+  border-radius: 999px;
   font-weight: 500;
-  transition: all 0.15s;
+  transition: background 0.2s ease;
 }
 .cube-btn-ghost:hover {
-  background: var(--t-accent-bg);
+  background: var(--t-elevated);
 }
 
-/* ── BookForm animations ─────────────────────────────── */
+/* ── 進場動畫：放慢、放輕 ─────────────────────────────── */
 @keyframes bk-slide-in {
-  from { opacity: 0; transform: translateY(16px); }
-  to   { opacity: 1; transform: translateY(0);    }
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0);   }
 }
 @keyframes bk-success-pop {
-  from { opacity: 0; transform: scale(0.88) translateY(28px); }
-  to   { opacity: 1; transform: scale(1)    translateY(0);    }
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
 }
-@keyframes bk-mark-bounce {
-  0%   { transform: scale(0) rotate(-20deg); }
-  65%  { transform: scale(1.22) rotate(6deg); }
-  100% { transform: scale(1)    rotate(0deg); }
-}
-
-.bk-step-content { animation: bk-slide-in 0.3s cubic-bezier(0.22, 1, 0.36, 1); }
-.bk-success-card { animation: bk-success-pop 0.42s cubic-bezier(0.22, 1, 0.36, 1); }
-.bk-success-mark { animation: bk-mark-bounce 0.52s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both; }
-
-.bk-chip { transition: transform 0.15s ease, box-shadow 0.15s ease; }
-.bk-chip:hover:not(:disabled) {
-  transform: translateY(-3px);
-  box-shadow: 0 6px 18px rgba(51, 40, 30, 0.14);
-}
-.bk-chip:active:not(:disabled) {
-  transform: scale(0.94);
-  transition-duration: 0.07s;
+@keyframes sheet-up {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0);    }
 }
 
-.bk-service { transition: transform 0.15s ease, box-shadow 0.15s ease; }
-.bk-service:hover:not(:disabled) {
-  transform: translateX(5px);
-  box-shadow: -3px 0 0 0 #B99868;
-}
-.bk-service:active:not(:disabled) {
-  transform: translateX(2px);
-  transition-duration: 0.07s;
-}
+.bk-step-content { animation: bk-slide-in 0.45s cubic-bezier(0.22, 1, 0.36, 1); }
+.bk-success-card { animation: bk-success-pop 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.sheet-up        { animation: sheet-up 0.35s cubic-bezier(0.22, 1, 0.36, 1); }
 
-.bk-nav-btn { transition: transform 0.14s ease, box-shadow 0.14s ease; }
-.bk-nav-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 22px rgba(51, 40, 30, 0.22);
-}
-.bk-nav-btn:active:not(:disabled) {
-  transform: scale(0.97);
-  transition-duration: 0.07s;
+@media (prefers-reduced-motion: reduce) {
+  .bk-step-content, .bk-success-card, .sheet-up { animation: none; }
 }
 /* ─────────────────────────────────────────────────────── */

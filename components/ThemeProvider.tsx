@@ -1,37 +1,25 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect } from 'react'
 
-type Theme = 'dark' | 'light'
-const ThemeContext = createContext<{ theme: Theme; toggle: () => void }>({ theme: 'dark', toggle: () => {} })
+// 這次改版決定只保留淺色（白紙墨線），不提供深色模式。
+// 保留 Provider 與 useTheme 介面，之後若要加回深色不用動到呼叫端。
+type Theme = 'light'
+const ThemeContext = createContext<{ theme: Theme }>({ theme: 'light' })
 
 export function useTheme() { return useContext(ThemeContext) }
 
 export default function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('dark')
-
   useEffect(() => {
-    const saved = localStorage.getItem('ada-theme') as Theme | null
-    const initial = saved ?? 'light'
-    setTheme(initial)
-    applyTheme(initial)
+    // 清掉舊版留下的深色設定，避免舊裝置卡在深色 class
+    const root = document.documentElement
+    root.classList.remove('dark')
+    root.classList.add('light')
+    try { localStorage.removeItem('ada-theme') } catch {}
   }, [])
 
-  function applyTheme(t: Theme) {
-    const root = document.documentElement
-    root.classList.remove('dark', 'light')
-    root.classList.add(t)
-  }
-
-  function toggle() {
-    const next = theme === 'dark' ? 'light' : 'dark'
-    setTheme(next)
-    applyTheme(next)
-    localStorage.setItem('ada-theme', next)
-  }
-
   return (
-    <ThemeContext.Provider value={{ theme, toggle }}>
+    <ThemeContext.Provider value={{ theme: 'light' }}>
       {children}
     </ThemeContext.Provider>
   )
