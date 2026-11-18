@@ -372,7 +372,6 @@ export default function AppointmentsClient({
                     top: px(start) + 1.5, height: h,
                     left: `calc(${(lane / lanes) * 100}% + 3px)`, width: `calc(${100 / lanes}% - 6px)`,
                     background: isSel ? cfg.color : cfg.bg,
-                    borderLeft: `3px solid ${cfg.color}`,
                     color: isSel ? '#fff' : cfg.color,
                     opacity: a.status === 'cancelled' ? 0.55 : 1,
                   }}>
