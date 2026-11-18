@@ -118,7 +118,8 @@ export default function BookForm({ businessName }: { businessName: string }) {
   const [submitting, setSubmitting] = useState(false)
   const [done, setDone] = useState<{ code: string; service: string; date: string; time: string } | null>(null)
   const [error, setError] = useState('')
-  const [lineUserId, setLineUserId] = useState('')
+  // LIFF 的 ID token：後端會向 LINE 驗證，取代直接傳 userId（可被偽造）
+  const [lineIdToken, setLineIdToken] = useState('')
   const [hours, setHours] = useState<BusinessHours>(DEFAULT_HOURS)
   const [returning, setReturning] = useState(false)
   const [mode, setMode] = useState<'booking' | 'quiz'>('booking')
@@ -144,12 +145,20 @@ export default function BookForm({ businessName }: { businessName: string }) {
         await liff.init({ liffId })
         if (!liff.isLoggedIn()) return
         const profile = await liff.getProfile()
-        setLineUserId(profile.userId)
         setForm(prev => ({ ...prev, name: prev.name || profile.displayName || '' }))
+
+        // 需在 LIFF 設定勾選 openid scope 才拿得到 ID token
+        const idToken = liff.getIDToken()
+        if (!idToken) return
+        setLineIdToken(idToken)
 
         // 老客自動帶入上次的基本資料，省去重複輸入
         try {
-          const r = await fetch(`/api/book/customer?lineUserId=${encodeURIComponent(profile.userId)}`)
+          const r = await fetch('/api/book/customer', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken }),
+          })
           const c = await r.json()
           if (c?.returning) {
             setReturning(true)
@@ -255,7 +264,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
       const res = await fetch('/api/book', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, lineUserId }),
+        body: JSON.stringify({ ...form, idToken: lineIdToken }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -530,7 +539,7 @@ export default function BookForm({ businessName }: { businessName: string }) {
               className="w-full resize-none rounded-lg border border-border-input bg-[#F7F7F3] px-3.5 py-3 text-base leading-relaxed text-ink outline-none placeholder:text-ink-faint focus:border-ink" />
           </div>
 
-          {lineUserId && (
+          {lineIdToken && (
             <p className="px-1.5 text-[13px] leading-relaxed text-ink-soft">預約前一天會用 LINE 提醒你。</p>
           )}
 
