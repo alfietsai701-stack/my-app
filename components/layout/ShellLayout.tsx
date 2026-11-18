@@ -7,6 +7,7 @@ import { Home, Calendar, Users, Menu, Plus, KeyRound, LogOut, X } from 'lucide-r
 import type { LucideIcon } from 'lucide-react'
 import Sidebar from './Sidebar'
 import PasswordModal from './PasswordModal'
+import WhatsNewBanner from './WhatsNewBanner'
 import { NAV_GROUPS, NEW_APPOINTMENT_HREF, canSee, handleNewAppointmentClick } from './nav-items'
 import type { Permissions } from '@/lib/permissions'
 
@@ -14,10 +15,12 @@ export default function ShellLayout({
   children,
   permissions,
   userName,
+  showWhatsNew = false,
 }: {
   children: React.ReactNode
   permissions: Permissions | null
   userName: string
+  showWhatsNew?: boolean
 }) {
   const pathname = usePathname()
   const router = useRouter()
@@ -43,6 +46,7 @@ export default function ShellLayout({
 
       {/* ── Main content ── */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        {showWhatsNew && <WhatsNewBanner userName={userName} />}
         <div className="flex flex-1 flex-col overflow-hidden">
           {children}
         </div>
