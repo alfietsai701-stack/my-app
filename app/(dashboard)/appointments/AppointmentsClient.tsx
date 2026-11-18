@@ -21,7 +21,10 @@ const STATUS = {
 const NEW_APPT_EVENT = 'ada:new-appointment'
 const PAY_METHODS = ['現金', '信用卡', 'Line Pay', '轉帳']
 const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
+// 預約結束後的緩衝時間：不顯示在畫面上，只用來決定空格能不能直接點「＋」新增
 const BUFFER_MIN = 60
+// 時間軸每小時的高度（px）
+const HOUR_H = { week: 64, day: 72 } as const
 
 // 手機預設看「日」（週曆在窄螢幕太擠），電腦預設看「週」
 const MOBILE_QUERY = '(max-width: 1023px)'
@@ -50,24 +53,35 @@ function getWeekDays(monday: Date) {
 function fmtTime(iso: string) {
   return new Date(iso).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
-function apptMatchesSlot(appt: Appt, slot: string) {
-  const d = new Date(appt.scheduledAt)
-  const [h, m] = slot.split(':').map(Number)
-  return d.getHours() === h && d.getMinutes() === m
+function minOfDay(d: Date) { return d.getHours()*60 + d.getMinutes() }
+function toMin(hhmm: string) { const [h, m] = hhmm.split(':').map(Number); return h*60 + m }
+/** 分鐘數 → 「上午10:30」「下午1:30」 */
+function fmtClock(min: number) {
+  const h = Math.floor(min/60) % 24, m = min % 60
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+  return `${h < 12 ? '上午' : '下午'}${h12}:${String(m).padStart(2,'0')}`
 }
-function calcBlocked(appts: Appt[], allSlots: string[]): Set<string> {
-  const blocked = new Set<string>()
-  appts.filter(a => a.status !== 'cancelled').forEach(a => {
-    const d = new Date(a.scheduledAt)
-    const start = d.getHours()*60 + d.getMinutes()
-    const end   = start + a.service.durationMin + BUFFER_MIN
-    allSlots.forEach(slot => {
-      const [sh, sm] = slot.split(':').map(Number)
-      const slotMin  = sh*60 + sm
-      if (slotMin > start && slotMin < end) blocked.add(slot)
-    })
-  })
-  return blocked
+
+type Placed = { a: Appt; start: number; end: number; lane: number; lanes: number }
+/** 依實際起訖時間排版；時間重疊的預約並排顯示 */
+function layoutDay(appts: Appt[]): Placed[] {
+  const items: Placed[] = appts
+    .map(a => { const s = minOfDay(new Date(a.scheduledAt)); return { a, start: s, end: s + a.service.durationMin, lane: 0, lanes: 1 } })
+    .sort((x, y) => x.start - y.start || y.end - x.end)
+  let cluster: Placed[] = []
+  let clusterEnd = -1
+  const laneEnds: number[] = []
+  const flush = () => { const n = Math.max(...cluster.map(p => p.lane + 1)); cluster.forEach(p => { p.lanes = n }) }
+  for (const p of items) {
+    if (cluster.length && p.start >= clusterEnd) { flush(); cluster = []; laneEnds.length = 0 }
+    let lane = laneEnds.findIndex(e => e <= p.start)
+    if (lane === -1) { lane = laneEnds.length; laneEnds.push(p.end) } else laneEnds[lane] = p.end
+    p.lane = lane
+    cluster.push(p)
+    clusterEnd = Math.max(clusterEnd, p.end)
+  }
+  if (cluster.length) flush()
+  return items
 }
 function groupByDate(appts: Appt[]): Record<string, Appt[]> {
   const map: Record<string, Appt[]> = {}
@@ -263,61 +277,128 @@ export default function AppointmentsClient({
     await reload()
   }
 
-  // ── shared sub-components ──
+  // ── 時間軸（週／日共用）──────────────────────────────────────────────────────
+  // 預約依「開始時間 + 服務時長」畫成一整塊；緩衝時間不顯示。
 
-  function ApptCard({ a, compact = false }: { a: Appt; compact?: boolean }) {
-    const cfg = STATUS[a.status as keyof typeof STATUS] ?? STATUS.confirmed
-    const isSel = selected?.id === a.id
-    return (
-      <div onClick={() => setSelected(isSel ? null : a)}
-        className="cursor-pointer rounded-lg transition-all"
-        style={{
-          background: isSel ? cfg.color : cfg.bg,
-          border: `1.5px solid ${isSel ? cfg.color : cfg.border}`,
-          color: isSel ? '#fff' : cfg.color,
-          opacity: a.status==='cancelled' ? 0.55 : 1,
-          padding: compact ? '4px 8px' : '6px 10px',
-          marginBottom: 3,
-        }}>
-        <p className="font-semibold truncate leading-tight" style={{ fontSize: compact ? 11 : 12 }}>{a.customer.name}</p>
-        <p className="truncate leading-tight opacity-75" style={{ fontSize: 10 }}>{a.service.name}</p>
-      </div>
-    )
-  }
-
-  function CellSlot({ ds, slot, dayAppts, blocked }: { ds: string; slot: string; dayAppts: Appt[]; blocked: boolean }) {
-    const cellAppts = dayAppts.filter(a => apptMatchesSlot(a, slot))
-    return (
-      <div className="relative group h-full p-1">
-        {cellAppts.map(a => <ApptCard key={a.id} a={a} compact />)}
-        {!blocked && cellAppts.length === 0 && (
-          <button onClick={() => openAdd(ds, slot)}
-            className="absolute inset-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center"
-            style={{ border: '1.5px dashed #8A8A82', background: '#F4F4EF' }}>
-            <Plus size={13} strokeWidth={2.5} style={{ color: 'var(--t-accent)' }} />
-          </button>
-        )}
-        {blocked && cellAppts.length === 0 && (
-          <div className="h-full flex items-center justify-center">
-            <span style={{ fontSize: 9, color: 'var(--t-text-4)' }}>緩衝</span>
-          </div>
-        )}
-      </div>
-    )
-  }
-
-  function isManuallyBlocked(ds: string, slot: string) {
-    for (const b of blocks) {
-      if (b.date !== ds) continue
-      // check if slot is within [start, end)
-      const [sh, sm] = b.start.split(':').map(Number)
-      const [eh, em] = b.end.split(':').map(Number)
-      const slotMin = slot.split(':').map(Number).reduce((a,c,i)=> a + (i===0?c*60:c), 0)
-      const startMin = sh*60 + sm
-      const endMin = eh*60 + em
-      if (slotMin >= startMin && slotMin < endMin) return true
+  const gridDays = view === 'week' ? weekDays.map(toDateStr) : [date]
+  const { gridStart, gridEnd } = (() => {
+    const slotMins = slots.map(toMin)
+    let lo = slotMins.length ? Math.min(...slotMins) : 11*60
+    let hi = slotMins.length ? Math.max(...slotMins) + 60 : 20*60
+    for (const ds of gridDays) {
+      for (const a of byDate[ds] ?? []) {
+        const s = minOfDay(new Date(a.scheduledAt))
+        lo = Math.min(lo, s); hi = Math.max(hi, s + a.service.durationMin)
+      }
+      for (const b of blocks) if (b.date === ds) { lo = Math.min(lo, toMin(b.start)); hi = Math.max(hi, toMin(b.end)) }
     }
-    return false
+    return { gridStart: Math.floor(lo/60)*60, gridEnd: Math.min(24*60, Math.ceil(hi/60)*60) }
+  })()
+  const gridHours = Array.from({ length: (gridEnd - gridStart)/60 }, (_, i) => gridStart/60 + i)
+
+  /** 這個時段能不能直接點「＋」新增：沒有預約（含結束後緩衝）也沒有休假 */
+  function isSlotFree(ds: string, slot: string) {
+    const m = toMin(slot)
+    for (const a of byDate[ds] ?? []) {
+      if (a.status === 'cancelled') continue
+      const s = minOfDay(new Date(a.scheduledAt))
+      if (m >= s && m < s + a.service.durationMin + BUFFER_MIN) return false
+    }
+    for (const b of blocks) if (b.date === ds && m >= toMin(b.start) && m < toMin(b.end)) return false
+    return true
+  }
+
+  function renderTimeGrid(days: string[], mode: 'week' | 'day') {
+    const hourH = HOUR_H[mode]
+    const px = (min: number) => ((min - gridStart) / 60) * hourH
+    const line = { borderColor: 'var(--color-line-soft)' }
+    const sortedSlots = [...slots].sort((x, y) => toMin(x) - toMin(y))
+    return (
+      <div className="grid" style={{ gridTemplateColumns: `${mode === 'week' ? 56 : 64}px repeat(${days.length},minmax(0,1fr))` }}>
+        {/* 時間刻度 */}
+        <div className="border-r" style={line}>
+          {gridHours.map(h => (
+            <div key={h} className="flex justify-center pt-2 border-b last:border-b-0" style={{ ...line, height: hourH }}>
+              <span className="num text-[15px]" style={{ color: 'var(--t-text-3)' }}>{String(h).padStart(2, '0')}:00</span>
+            </div>
+          ))}
+        </div>
+
+        {days.map(ds => (
+          <div key={ds} className="relative border-r last:border-r-0"
+            style={{ ...line, height: gridHours.length * hourH, background: mode === 'week' && ds === today ? '#F7F7F3' : '' }}>
+            {/* 每小時格線 */}
+            {gridHours.map(h => <div key={h} className="border-b last:border-b-0" style={{ ...line, height: hourH }} />)}
+
+            {/* 空時段：滑過出現「＋」 */}
+            {sortedSlots.map((s, i) => {
+              if (!isSlotFree(ds, s)) return null
+              const start = toMin(s)
+              const next = sortedSlots[i + 1] ? toMin(sortedSlots[i + 1]) : start + 60
+              return (
+                <button key={s} onClick={() => openAdd(ds, s)} aria-label={`新增 ${s} 預約`}
+                  className={`absolute left-1 right-1 flex items-center justify-center gap-1 opacity-0 hover:opacity-100 focus-visible:opacity-100 transition-opacity ${mode === 'week' ? 'rounded-md' : 'rounded-xl'}`}
+                  style={{ top: px(start) + 2, height: (Math.min(next - start, 60) / 60) * hourH - 4,
+                    border: '1.5px dashed #8A8A82', background: '#F4F4EF', color: 'var(--t-text-4)' }}>
+                  <Plus size={13} strokeWidth={2.5} style={{ color: 'var(--t-accent)' }} />
+                  {mode === 'day' && <span className="text-xs">新增</span>}
+                </button>
+              )
+            })}
+
+            {/* 休假（手動封鎖的時段） */}
+            {blocks.filter(b => b.date === ds).map(b => {
+              const start = toMin(b.start), end = toMin(b.end)
+              return (
+                <button key={b.id} onClick={() => handleDeleteBlock(b.id)} title="點一下可刪除這個休假"
+                  className="absolute left-1 right-1 overflow-hidden rounded-lg px-2 py-1 text-left"
+                  style={{ top: px(start) + 1, height: Math.max(((end - start) / 60) * hourH - 2, 22),
+                    background: 'repeating-linear-gradient(135deg, #F4F4EF 0 6px, #ECECE6 6px 12px)', color: 'var(--t-text-3)' }}>
+                  <p className="text-[11px] font-semibold leading-tight">休假</p>
+                  <p className="text-[10px] leading-tight opacity-80">{fmtClock(start)} - {fmtClock(end)}{b.note ? `・${b.note}` : ''}</p>
+                </button>
+              )
+            })}
+
+            {/* 預約：依服務時長畫成一整塊 */}
+            {layoutDay(byDate[ds] ?? []).map(({ a, start, end, lane, lanes }) => {
+              const cfg = STATUS[a.status as keyof typeof STATUS] ?? STATUS.confirmed
+              const isSel = selected?.id === a.id
+              const h = Math.max(((end - start) / 60) * hourH - 3, 26)
+              return (
+                <div key={a.id} onClick={() => setSelected(isSel ? null : a)}
+                  className={`absolute z-[1] cursor-pointer overflow-hidden transition-colors ${mode === 'week' ? 'rounded-lg px-2 py-1' : 'rounded-xl px-3.5 py-2'}`}
+                  style={{
+                    top: px(start) + 1.5, height: h,
+                    left: `calc(${(lane / lanes) * 100}% + 3px)`, width: `calc(${100 / lanes}% - 6px)`,
+                    background: isSel ? cfg.color : cfg.bg,
+                    color: isSel ? '#fff' : cfg.color,
+                    opacity: a.status === 'cancelled' ? 0.55 : 1,
+                  }}>
+                  {mode === 'week' ? (
+                    <>
+                      <p className="truncate leading-tight opacity-80 text-[10px]">{fmtClock(start)} - {fmtClock(end)}</p>
+                      <p className="truncate leading-tight font-semibold text-xs mt-0.5">{a.customer.name}</p>
+                      <p className="truncate leading-tight opacity-75 text-[11px]">{a.service.name}</p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-xs opacity-80">{fmtClock(start)} - {fmtClock(end)}</p>
+                        <span className="text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0"
+                          style={{ background: isSel ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.05)' }}>{cfg.label}</span>
+                      </div>
+                      <p className="truncate text-sm font-semibold mt-0.5">{a.customer.name}　{a.service.name}</p>
+                      <p className="truncate text-xs opacity-70 mt-0.5">{a.service.durationMin} 分鐘・NT$ {a.service.price.toLocaleString()}</p>
+                    </>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+    )
   }
 
   // ── render ────────────────────────────────────────────────────────────────
@@ -425,27 +506,7 @@ export default function AppointmentsClient({
                   })}
                 </div>
 
-                {/* Slot rows */}
-                {slots.map(slot => (
-                  <div key={slot} className="grid border-b"
-                    style={{ gridTemplateColumns:'56px repeat(7,minmax(0,1fr))', borderColor:'var(--color-line-soft)', minHeight:64 }}>
-                    <div className="border-r flex items-start justify-center pt-2 shrink-0"
-                      style={{ borderColor:'var(--color-line-soft)' }}>
-                      <span className="num text-[15px]" style={{ color:'var(--t-text-3)' }}>{slot}</span>
-                    </div>
-                    {weekDays.map(day => {
-                      const ds = toDateStr(day)
-                      const dayAppts = byDate[ds]??[]
-                      const blocked  = calcBlocked(dayAppts, slots).has(slot) || isManuallyBlocked(ds, slot)
-                      return (
-                        <div key={ds} className="border-r last:border-r-0"
-                          style={{ borderColor:'var(--color-line-soft)', background: blocked?'rgba(0,0,0,0.02)': toDateStr(day)===today?'#F7F7F3':'' }}>
-                          <CellSlot ds={ds} slot={slot} dayAppts={dayAppts} blocked={blocked}/>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ))}
+                {renderTimeGrid(gridDays, 'week')}
               </div>
             </div>
           </div>
@@ -456,62 +517,13 @@ export default function AppointmentsClient({
           <div className={`flex flex-col flex-1 overflow-hidden px-4 lg:px-5 pb-3 lg:pb-5 ${selected ? 'hidden lg:flex' : ''}`}
             style={{ background:'var(--t-bg)' }}>
             <div className="flex-1 overflow-auto rounded-2xl" style={{ background:'var(--t-surface)' }}>
-              {slots.map(slot => {
-                const dayAppts = byDate[date]??[]
-                const cellAppts = dayAppts.filter(a => apptMatchesSlot(a, slot))
-                const blocked   = calcBlocked(dayAppts, slots).has(slot) || isManuallyBlocked(date, slot)
-                return (
-                  <div key={slot} className="flex border-b group"
-                    style={{ borderColor:'var(--color-line-soft)', minHeight:72 }}>
-                    <div className="w-16 shrink-0 flex items-start justify-center pt-3 border-r"
-                      style={{ borderColor:'var(--color-line-soft)', background: blocked?'rgba(0,0,0,0.015)':'' }}>
-                      <span className="num text-base" style={{ color:'var(--t-text-3)' }}>{slot}</span>
-                    </div>
-                    <div className="flex-1 p-2 relative">
-                      {cellAppts.map(a => {
-                        const cfg = STATUS[a.status as keyof typeof STATUS]??STATUS.confirmed
-                        const isSel = selected?.id===a.id
-                        return (
-                          <div key={a.id} onClick={() => setSelected(isSel ? null : a)}
-                            className="cursor-pointer rounded-xl px-4 py-3 mb-1.5 transition-all"
-                            style={{ background: isSel?cfg.color:cfg.bg, border:`1.5px solid ${isSel?cfg.color:cfg.border}`,
-                              color: isSel?'#fff':cfg.color, opacity: a.status==='cancelled'?0.5:1 }}>
-                            <div className="flex items-center justify-between gap-2">
-                              <p className="text-sm font-semibold">{a.customer.name}</p>
-                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-full shrink-0"
-                                style={{ background: isSel?'rgba(255,255,255,0.2)':'rgba(0,0,0,0.05)' }}>{cfg.label}</span>
-                            </div>
-                            <div className="flex items-center gap-3 mt-1 text-xs opacity-70">
-                              <span>{a.service.name}</span>
-                              <span>{a.service.durationMin} 分鐘</span>
-                              <span>NT$ {a.service.price.toLocaleString()}</span>
-                            </div>
-                          </div>
-                        )
-                      })}
-                      {!blocked && cellAppts.length===0 && (
-                        <button onClick={() => openAdd(date, slot)}
-                          className="absolute inset-1 rounded-xl opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-1"
-                          style={{ border:'1.5px dashed var(--t-border-s)', color:'var(--t-text-4)' }}>
-                          <Plus size={13} strokeWidth={2}/><span className="text-xs">新增</span>
-                        </button>
-                      )}
-                      {blocked && cellAppts.length===0 && (
-                        <div className="flex items-center h-full min-h-[48px] px-2">
-                          <span className="text-xs" style={{ color:'var(--t-text-4)' }}>緩衝時段</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-              <div className="px-5 py-3 text-xs" style={{ color:'var(--t-text-4)' }}>
+              {renderTimeGrid(gridDays, 'day')}
+              <div className="px-5 py-3 text-xs border-t" style={{ color:'var(--t-text-4)', borderColor:'var(--color-line-soft)' }}>
                 共 {(byDate[date]??[]).filter(a=>a.status!=='cancelled').length} 筆有效預約
               </div>
             </div>
           </div>
         )}
-
         {/* ══ MONTH VIEW ══ */}
         {view==='month' && (
           <div className={`flex-1 overflow-auto ${selected?'hidden lg:block':''}`} style={{ background:'var(--t-bg)' }}>
