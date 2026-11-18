@@ -1,17 +1,11 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import type { CSSProperties } from 'react'
-import { Sparkles, ChevronRight, RotateCcw } from 'lucide-react'
+import { serviceDescription } from '@/lib/booking-content'
+import { ChevronRight, RotateCcw } from 'lucide-react'
 
 type Service = { id: string; name: string; price: number; durationMin: number; category: string }
 type ServiceMap = Record<string, Service[]>
-
-const C = {
-  surface: '#FFFDFC', border: '#E4D3BE', borderStrong: '#DCC7AA',
-  accent: '#B99868', accentBg: 'rgba(185,152,104,0.14)', dark: '#33281E',
-  text: '#33281E', text3: '#76685B', text4: '#9A8A7B', bg: '#F8F1E6',
-}
 
 type Option = { label: string; keywords: string[] }
 type Question = { id: string; title: string; options: Option[] }
@@ -67,7 +61,7 @@ function recommend(services: ServiceMap, answers: Option[]): { category: string;
   const [min, max] = budgetRange(answers[2]?.keywords ?? [])
 
   const scored = all.map(item => {
-    const hay = `${item.service.name} ${item.category}`.toLowerCase()
+    const hay = `${item.service.name} ${item.category} ${serviceDescription(item.service.name) ?? ''}`.toLowerCase()
     let score = 0
     answers[0]?.keywords.forEach(k => { if (hay.includes(k.toLowerCase())) score += 2 })
     answers[1]?.keywords.forEach(k => { if (hay.includes(k.toLowerCase())) score += 1 })
@@ -102,37 +96,34 @@ export default function Quiz({ services, onPick }: {
   }
   function restart() { setStep(0); setAnswers([]) }
 
-  const card: CSSProperties = { background: C.surface, border: `1px solid ${C.border}` }
-
   if (step >= QUESTIONS.length) {
     return (
-      <div className="mx-auto w-full max-w-lg">
-        <div className="mb-6 flex items-center gap-2">
-          <Sparkles size={16} style={{ color: C.accent }} />
-          <p className="text-sm font-medium" style={{ color: C.dark }}>為你推薦的方案</p>
-        </div>
+      <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
+        <p className="font-heading text-lg font-semibold text-ink">為你推薦的方案</p>
 
         {results.length === 0 ? (
-          <p className="text-sm" style={{ color: C.text3 }}>目前尚無可推薦的方案，請直接前往預約。</p>
+          <p className="text-sm text-ink-muted">目前沒有可以推薦的方案，請直接回去挑選服務。</p>
         ) : (
-          <div className="space-y-3">
+          <div className="flex flex-col gap-2.5">
             {results.map(({ category, service }, i) => (
               <button key={service.id} onClick={() => onPick(category, service.id)}
-                className="flex w-full items-center justify-between p-4 text-left transition-all hover:shadow-sm"
-                style={{ ...card, borderColor: i === 0 ? C.accent : C.border }}>
-                <div>
-                  {i === 0 && <span className="mb-1 inline-block text-[10px] tracking-[0.2em]" style={{ color: C.accent }}>最推薦</span>}
-                  <p className="text-sm font-medium" style={{ color: C.dark }}>{service.name}</p>
-                  <p className="mt-0.5 text-xs" style={{ color: C.text4 }}>{category}・{service.durationMin} 分鐘・NT$ {service.price.toLocaleString()}</p>
+                className={`flex w-full items-center justify-between gap-3 rounded-lg p-4 text-left transition-colors ${
+                  i === 0 ? 'bg-sage-fresh' : 'border border-line hover:bg-surface-muted'
+                }`}>
+                <div className="flex min-w-0 flex-col gap-1">
+                  {i === 0 && <span className="text-xs font-bold text-visit-green-ink">最推薦</span>}
+                  <span className="font-heading text-base font-semibold text-ink">{service.name}</span>
+                  {serviceDescription(service.name) && <span className="text-[13px] leading-relaxed text-ink-soft">{serviceDescription(service.name)}</span>}
+                  <span className="text-xs text-ink-muted">{category}・{service.durationMin} 分鐘・NT$ {service.price.toLocaleString()}</span>
                 </div>
-                <span className="flex items-center gap-1 text-xs" style={{ color: C.accent }}>預約<ChevronRight size={14} /></span>
+                <span className="flex h-11 shrink-0 items-center gap-1 rounded-full bg-ink px-4 text-[13px] text-paper">預約<ChevronRight size={14} /></span>
               </button>
             ))}
           </div>
         )}
 
-        <button onClick={restart} className="mt-6 flex items-center gap-2 text-xs" style={{ color: C.text4 }}>
-          <RotateCcw size={12} />重新測驗
+        <button onClick={restart} className="flex h-11 items-center gap-2 self-start text-[13px] text-ink underline underline-offset-4">
+          <RotateCcw size={13} />重新測驗
         </button>
       </div>
     )
@@ -140,24 +131,21 @@ export default function Quiz({ services, onPick }: {
 
   const q = QUESTIONS[step]
   return (
-    <div className="mx-auto w-full max-w-lg">
-      <div className="mb-6">
-        <p className="mb-2 text-[11px] tracking-[0.2em]" style={{ color: C.accent }}>測驗 {step + 1} / {QUESTIONS.length}</p>
-        <div className="h-1 w-full" style={{ background: C.accentBg }}>
-          <div className="h-1 transition-all" style={{ width: `${((step) / QUESTIONS.length) * 100}%`, background: C.accent }} />
+    <div className="mx-auto flex w-full max-w-lg flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <p className="text-xs text-ink-muted">第 {step + 1} 題，共 {QUESTIONS.length} 題</p>
+        <div className="h-1 w-full rounded-full bg-line-soft">
+          <div className="h-1 rounded-full bg-ink transition-all duration-500" style={{ width: `${((step + 1) / QUESTIONS.length) * 100}%` }} />
         </div>
       </div>
 
-      <p className="mb-5 text-lg font-medium" style={{ color: C.dark }}>{q.title}</p>
-      <div className="space-y-3">
+      <p className="font-heading text-lg font-semibold text-ink">{q.title}</p>
+      <div className="flex flex-col gap-2.5">
         {q.options.map(opt => (
           <button key={opt.label} onClick={() => choose(opt)}
-            className="flex w-full items-center justify-between p-4 text-left transition-all hover:shadow-sm"
-            style={card}
-            onMouseEnter={e => (e.currentTarget.style.borderColor = C.accent)}
-            onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}>
-            <span className="text-sm" style={{ color: C.text }}>{opt.label}</span>
-            <ChevronRight size={15} style={{ color: C.text4 }} />
+            className="flex min-h-[52px] w-full items-center justify-between gap-3 rounded-lg border border-line px-4 py-3 text-left transition-colors hover:border-ink hover:bg-surface-muted">
+            <span className="text-sm text-ink">{opt.label}</span>
+            <ChevronRight size={16} className="shrink-0 text-ink-muted" />
           </button>
         ))}
       </div>

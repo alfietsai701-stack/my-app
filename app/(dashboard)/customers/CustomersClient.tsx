@@ -1,8 +1,13 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import { Plus, Search, X, ChevronRight } from 'lucide-react'
+import { ChevronLeft, Plus } from 'lucide-react'
 import { DEFAULT_CUSTOMER_TAGS } from '@/lib/customer-tags'
+import { VISIT_LIGHT_DAYS, VISIT_LIGHT_LABEL, visitLight, type VisitLightLevel } from '@/lib/visit-lights'
+import {
+  PageHeader, FilterChip, Tag, VisitLightTag, LightDot, SearchInput, Modal, FormField, EmptyState,
+  btnPrimary, btnOutline, btnDanger, btnText, inputCls,
+} from '@/components/ui/kit'
 
 type Customer = {
   id: string; name: string; phone: string
@@ -19,10 +24,14 @@ type CustomerDetail = Customer & { appointments: Appointment[]; member: { tier: 
 const EMPTY = { name: '', phone: '', birthday: '', note: '', tags: [] as string[] }
 
 const statusLabel: Record<string, string> = { confirmed: '已確認', completed: '已完成', cancelled: '已取消' }
-const statusStyle: Record<string, string> = {
-  confirmed: 'text-[var(--t-accent)]',
-  completed: 'text-[#6B9E78]',
-  cancelled:  'text-[#A06060]',
+const TIER_LABEL: Record<string, string> = { general: '一般', silver: '銀卡', gold: '金卡' }
+const LIGHT_LEVELS: VisitLightLevel[] = ['green', 'yellow', 'red']
+const LIST_COLS = 'lg:grid-cols-[1.2fr_1.1fr_0.6fr_0.8fr_1.4fr]'
+
+function fmtDay(iso: string) {
+  const d = new Date(iso)
+  const sameYear = d.getFullYear() === new Date().getFullYear()
+  return sameYear ? `${d.getMonth() + 1}/${d.getDate()}` : `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
 }
 
 function age(birthday: string) {
@@ -30,7 +39,11 @@ function age(birthday: string) {
   return Math.floor(diff / (1000 * 60 * 60 * 24 * 365.25))
 }
 
-export default function CustomersClient({ initialCustomers }: { initialCustomers: Customer[] }) {
+export default function CustomersClient({ initialCustomers, lastVisits }: {
+  initialCustomers: Customer[]
+  /** 顧客 id → 最近一次來訪時間（ISO）。用來算回訪燈號。 */
+  lastVisits: Record<string, string>
+}) {
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
   const [q, setQ] = useState('')
   const [detail, setDetail] = useState<CustomerDetail | null>(null)
@@ -40,6 +53,13 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
   const [saving, setSaving] = useState(false)
   const [tagFilter, setTagFilter] = useState('')
   const [customTag, setCustomTag] = useState('')
+  const [lightFilter, setLightFilter] = useState<VisitLightLevel | ''>('')
+
+  // 回訪燈號：依最近來訪時間即時計算
+  const lights = Object.fromEntries(customers.map(c => [c.id, visitLight(lastVisits[c.id])]))
+  const lightCounts = { green: 0, yellow: 0, red: 0 }
+  customers.forEach(c => { const l = lights[c.id]; if (l) lightCounts[l.level]++ })
+  const visible = lightFilter ? customers.filter(c => lights[c.id]?.level === lightFilter) : customers
 
   const load = useCallback(async (search = q, tag = tagFilter) => {
     const res = await fetch(`/api/customers?q=${encodeURIComponent(search)}${tag ? `&tag=${encodeURIComponent(tag)}` : ''}`)
@@ -98,214 +118,217 @@ export default function CustomersClient({ initialCustomers }: { initialCustomers
     setCustomTag('')
   }
 
+  const detailLight = detail ? visitLight(lastVisits[detail.id]) : null
+  const detailSpend = detail ? detail.appointments.reduce((sum, a) => sum + (a.receipt?.total ?? 0), 0) : 0
+  const detailVisits = detail ? detail.appointments.filter(a => a.status !== 'cancelled').length : 0
+
   return (
-    <div className="flex flex-col flex-1 overflow-hidden">
-      <header className="h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-center justify-between px-8 shrink-0">
-        <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-3)] uppercase">顧客管理</p>
-        <button onClick={() => { setForm(EMPTY); setAdding(true) }}
-          className="flex items-center gap-2 border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">
-          <Plus size={11} />新增顧客
+    <div className="flex flex-1 flex-col overflow-hidden" style={{ background: 'var(--t-bg)' }}>
+      <PageHeader title="顧客" meta={`共 ${customers.length} 位`}>
+        <SearchInput value={q} onChange={setQ} placeholder="搜尋姓名或電話" className="hidden w-[260px] lg:flex" />
+        <button onClick={() => { setForm(EMPTY); setAdding(true) }} className={btnPrimary}>
+          <Plus size={16} strokeWidth={1.8} />新增顧客
         </button>
-      </header>
+      </PageHeader>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* List */}
-        <div className={`flex flex-col border-r border-[var(--t-border)] transition-all ${detail ? 'hidden lg:flex lg:w-[55%]' : 'flex-1'}`}>
-          {/* Search */}
-          <div className="px-8 py-4 border-b border-[var(--t-border)] bg-[var(--t-surface)]">
-            <div className="flex items-center gap-3 border-b border-[var(--t-border-s)] pb-2 focus-within:border-[var(--t-accent)] transition-colors">
-              <Search size={12} strokeWidth={1.5} className="text-[var(--t-text-4)] shrink-0" />
-              <input value={q} onChange={e => setQ(e.target.value)} placeholder="搜尋姓名或電話"
-                className="flex-1 bg-transparent text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] focus:outline-none" />
-              {q && <button onClick={() => setQ('')}><X size={11} className="text-[var(--t-text-4)] hover:text-[var(--t-text-3)]" /></button>}
-            </div>
-            <div className="flex flex-wrap gap-1.5 mt-3">
-              {DEFAULT_CUSTOMER_TAGS.map(t => (
-                <button key={t} onClick={() => setTagFilter(f => (f === t ? '' : t))}
-                  className={`px-2.5 py-0.5 text-[10px] tracking-wide border transition-colors ${tagFilter === t ? 'border-[var(--t-accent)] bg-[var(--t-accent)] text-[var(--t-accent-fg)]' : 'border-[var(--t-border-s)] text-[var(--t-text-3)] hover:border-[var(--t-accent)]'}`}>
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-auto bg-[var(--t-bg)]">
-            {customers.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-64 text-center">
-                <p className="text-xs text-[var(--t-text-3)] tracking-widest mb-2">尚無顧客資料</p>
-                <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">點擊「新增顧客」開始建立</p>
-              </div>
-            ) : (
-              <table className="w-full">
-                <thead className="sticky top-0 bg-[var(--t-surface)] z-10">
-                  <tr className="border-b border-[var(--t-border)]">
-                    {['姓名', '電話', '年齡', '預約次數', ''].map((h, i) => (
-                      <th key={i} className={`text-[10px] font-normal text-[var(--t-text-4)] tracking-[0.25em] uppercase py-3 ${i <= 1 ? 'text-left px-8' : i === 4 ? 'w-10 px-4' : 'text-right px-8'}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="bg-[var(--t-surface)]">
-                  {customers.map(c => (
-                    <tr key={c.id} onClick={() => openDetail(c.id)}
-                      className={`border-b border-[var(--t-border)] last:border-0 cursor-pointer transition-colors ${detail?.id === c.id ? 'bg-[var(--t-bg)]' : 'hover:bg-[var(--t-bg)]'}`}>
-                      <td className="px-8 py-4">
-                        <span className="text-sm font-light text-[var(--t-text)] tracking-wide">{c.name}</span>
-                        {c.tags?.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {c.tags.slice(0, 3).map(t => (
-                              <span key={t} className="text-[9px] tracking-wide text-[var(--t-accent)] border border-[var(--t-accent-bg)] px-1.5 py-0.5">{t}</span>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-8 py-4 text-xs text-[var(--t-text-3)] tabular-nums tracking-wide">{c.phone}</td>
-                      <td className="px-8 py-4 text-right text-xs text-[var(--t-text-3)]">{c.birthday ? `${age(c.birthday)} 歲` : '—'}</td>
-                      <td className="px-8 py-4 text-right text-xs text-[var(--t-text-3)] tabular-nums">{c._count.appointments}</td>
-                      <td className="px-4 py-4 text-right"><ChevronRight size={12} strokeWidth={1.5} className="text-[var(--t-text-4)] ml-auto" /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-          <div className="px-8 py-3 border-t border-[var(--t-border)] bg-[var(--t-surface)]">
-            <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">{customers.length} 位顧客</p>
-          </div>
+      <div className={`shrink-0 flex-col gap-2.5 px-4 pt-2 lg:px-5 ${detail ? 'hidden lg:flex' : 'flex'}`}>
+        <SearchInput value={q} onChange={setQ} placeholder="搜尋姓名或電話" className="lg:hidden" />
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-wrap lg:px-0">
+          <FilterChip active={!tagFilter && !lightFilter} onClick={() => { setTagFilter(''); setLightFilter('') }}>全部</FilterChip>
+          {LIGHT_LEVELS.map(level => (
+            <FilterChip key={level} active={lightFilter === level} onClick={() => setLightFilter(f => (f === level ? '' : level))}>
+              <LightDot level={level} size={12} />
+              {VISIT_LIGHT_LABEL[level]}　超過 {VISIT_LIGHT_DAYS[level]} 天　{lightCounts[level]}
+            </FilterChip>
+          ))}
+          {DEFAULT_CUSTOMER_TAGS.map(t => (
+            <FilterChip key={t} active={tagFilter === t} onClick={() => setTagFilter(f => (f === t ? '' : t))}>{t}</FilterChip>
+          ))}
         </div>
+        <p className="hidden text-xs text-ink-muted lg:block">
+          回訪燈號：超過 {VISIT_LIGHT_DAYS.green} 天沒來亮綠燈、{VISIT_LIGHT_DAYS.yellow} 天黃燈、{VISIT_LIGHT_DAYS.red} 天紅燈。
+        </p>
+      </div>
 
-        {/* Detail panel */}
-        {detail && (
-          <div className="flex-1 flex flex-col overflow-hidden bg-[var(--t-bg)]">
-            <div className="px-4 lg:px-8 py-4 lg:py-5 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-start justify-between shrink-0">
-              <div>
-                <p className="text-base font-light text-[var(--t-text)] tracking-wide mb-1">{detail.name}</p>
-                <p className="text-xs text-[var(--t-text-3)] tracking-wide">{detail.phone}</p>
+      <div className="flex flex-1 gap-5 overflow-hidden px-4 pb-3 pt-3 lg:px-5 lg:pb-5">
+        {/* ── 顧客清單 ── */}
+        <section className={`min-w-0 flex-1 flex-col overflow-hidden rounded-2xl bg-surface ${detail ? 'hidden lg:flex' : 'flex'}`}>
+          {visible.length === 0 ? (
+            <EmptyState title={customers.length === 0 ? '還沒有顧客資料' : '沒有符合條件的顧客'}
+              hint={customers.length === 0 ? '按「新增顧客」建立第一位。' : '換個篩選條件試試。'} />
+          ) : (
+            <div className="flex-1 overflow-auto px-2 pb-2 pt-4">
+              <div className={`hidden gap-2 px-3.5 pb-2 text-xs text-ink-muted lg:grid ${LIST_COLS}`}>
+                <span>姓名</span><span>電話</span><span>來訪</span><span>最近來訪</span><span>回訪燈號</span>
               </div>
-              <div className="flex items-center gap-3">
-                <button onClick={() => openEdit(detail)} className="text-[10px] tracking-wide text-[var(--t-text-3)] hover:text-[var(--t-accent)] transition-colors">編輯</button>
-                <button onClick={() => handleDelete(detail.id, detail.name)} className="text-[10px] tracking-wide text-[var(--t-text-3)] hover:text-[#A05050] transition-colors">刪除</button>
-                <button onClick={() => setDetail(null)} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none transition-colors ml-2" aria-label="關閉">×</button>
-              </div>
+              {visible.map(c => {
+                const light = lights[c.id]
+                const last = lastVisits[c.id]
+                const selected = detail?.id === c.id
+                return (
+                  <button key={c.id} onClick={() => openDetail(c.id)} aria-pressed={selected}
+                    className={`grid min-h-[60px] w-full grid-cols-[1fr_auto] items-center gap-2 rounded-lg px-3.5 py-2 text-left text-sm text-ink transition-colors ${LIST_COLS} ${
+                      selected ? 'bg-surface-muted font-medium' : 'hover:bg-surface-muted'
+                    }`}>
+                    <span className="flex min-w-0 flex-col gap-1">
+                      <span className="truncate text-[15px] lg:text-sm">{c.name}</span>
+                      <span className="text-xs font-normal text-ink-muted lg:hidden">
+                        來訪 {c._count.appointments} 次{last ? `・最近 ${fmtDay(last)}` : ''}
+                      </span>
+                      {c.tags?.length > 0 && (
+                        <span className="flex flex-wrap gap-1">
+                          {c.tags.slice(0, 3).map(t => <Tag key={t} kind="sage">{t}</Tag>)}
+                        </span>
+                      )}
+                    </span>
+                    <span className="hidden font-normal text-ink-soft lg:block">{c.phone}</span>
+                    <span className="hidden font-normal lg:block">{c._count.appointments} 次</span>
+                    <span className="hidden font-normal text-ink-soft lg:block">{last ? fmtDay(last) : '—'}</span>
+                    <span>{light ? <VisitLightTag light={light} /> : <span className="hidden text-xs text-ink-muted lg:inline">—</span>}</span>
+                  </button>
+                )
+              })}
             </div>
+          )}
+        </section>
 
-            <div className="flex-1 overflow-auto p-4 lg:p-8 space-y-6">
-              {/* Basic info */}
-              <div className="bg-[var(--t-surface)] border border-[var(--t-border)] px-7 py-5">
-                <div className="grid grid-cols-2 gap-y-4">
+        {/* ── 顧客資料 ── */}
+        {detail && (
+          <section aria-label="顧客資料" className="flex w-full flex-col overflow-hidden rounded-2xl bg-surface lg:w-[400px] lg:shrink-0">
+            <div className="flex-1 overflow-auto p-5 lg:p-[22px]">
+              <div className="flex flex-col gap-4">
+                <div className="flex items-start gap-2">
+                  <button onClick={() => setDetail(null)} aria-label="回到顧客清單"
+                    className="-ml-2 flex size-11 shrink-0 items-center justify-center rounded-full text-ink hover:bg-surface-muted lg:hidden">
+                    <ChevronLeft size={20} strokeWidth={1.6} />
+                  </button>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <h2 className="truncate text-2xl tracking-[0.08em] text-ink">{detail.name}</h2>
+                    <span className="text-[13px] text-ink-soft">{detail.phone}</span>
+                  </div>
+                  <span className="hidden lg:block">
+                    <button onClick={() => setDetail(null)} className={btnText}>關閉</button>
+                  </span>
+                </div>
+
+                {detailLight && (
+                  <p className={`flex items-center gap-2 rounded-xl px-3.5 py-3 text-sm font-bold ${
+                    detailLight.level === 'red' ? 'bg-visit-red-bg text-visit-red-ink'
+                      : detailLight.level === 'yellow' ? 'bg-visit-yellow-bg text-visit-yellow-ink'
+                      : 'bg-visit-green-bg text-visit-green-ink'
+                  }`}>
+                    <LightDot level={detailLight.level} size={12} />
+                    {VISIT_LIGHT_LABEL[detailLight.level]}・已經 {detailLight.days} 天沒來
+                  </p>
+                )}
+
+                <div className="flex gap-3 border-b border-line-soft border-t-ink py-3.5 [border-top-width:1px]">
+                  <Stat label="來訪" value={`${detailVisits} 次`} />
+                  <Stat label="累計消費" value={detailSpend > 0 ? detailSpend.toLocaleString() : '—'} />
+                  <Stat label="最近來訪" value={lastVisits[detail.id] ? fmtDay(lastVisits[detail.id]) : '—'} />
+                </div>
+
+                <dl className="grid grid-cols-2 gap-x-3 gap-y-3 text-sm">
                   {[
                     ['生日', detail.birthday ? `${detail.birthday.slice(0, 10)}（${age(detail.birthday)} 歲）` : '—'],
                     ['加入日期', new Date(detail.createdAt).toLocaleDateString('zh-TW')],
-                    ['備註', detail.note || '—'],
-                    ['會員等級', detail.member ? { general: '一般', silver: '銀卡', gold: '金卡' }[detail.member.tier] ?? detail.member.tier : '非會員'],
+                    ['會員等級', detail.member ? TIER_LABEL[detail.member.tier] ?? detail.member.tier : '非會員'],
                   ].map(([label, value]) => (
-                    <div key={label}>
-                      <p className="text-[10px] text-[var(--t-text-4)] tracking-[0.2em] uppercase mb-1">{label}</p>
-                      <p className="text-xs text-[var(--t-text-2)] font-light">{value}</p>
+                    <div key={label} className="flex flex-col gap-0.5">
+                      <dt className="text-xs text-ink-muted">{label}</dt>
+                      <dd className="text-ink">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+
+                <div className="flex flex-col gap-2">
+                  <span className="text-[13px] font-bold text-ink">標籤與備註</span>
+                  {detail.tags?.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">{detail.tags.map(t => <Tag key={t} kind="sage">{t}</Tag>)}</div>
+                  )}
+                  <p className="rounded-lg bg-surface-muted px-3.5 py-2.5 text-[13px] leading-relaxed text-ink">
+                    {detail.note || '尚無備註。可以記下膚質、過敏或偏好。'}
+                  </p>
+                </div>
+
+                <div className="flex flex-col">
+                  <div className="flex items-baseline justify-between pb-1">
+                    <span className="text-[13px] font-bold text-ink">預約紀錄</span>
+                    <span className="text-xs text-ink-muted">{detail.appointments.length} 筆</span>
+                  </div>
+                  {detail.appointments.length === 0 ? (
+                    <p className="py-3 text-[13px] text-ink-muted">還沒有預約紀錄。</p>
+                  ) : detail.appointments.map(a => (
+                    <div key={a.id} className="flex items-center justify-between gap-2 border-b border-line-soft py-2.5 text-[13px] last:border-0">
+                      <span className="flex min-w-0 flex-col gap-0.5">
+                        <span className={`truncate text-ink ${a.status === 'cancelled' ? 'text-ink-faint line-through' : ''}`}>{a.service.name}</span>
+                        <span className="text-xs text-ink-muted">{fmtDay(a.scheduledAt)}・{statusLabel[a.status] ?? a.status}</span>
+                      </span>
+                      <span className="num shrink-0 text-base text-ink">{a.receipt ? a.receipt.total.toLocaleString() : '—'}</span>
                     </div>
                   ))}
                 </div>
-                {detail.tags?.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-[var(--t-border)]">
-                    <p className="text-[10px] text-[var(--t-text-4)] tracking-[0.2em] uppercase mb-2">標籤</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {detail.tags.map(t => (
-                        <span key={t} className="text-[10px] tracking-wide text-[var(--t-accent)] border border-[var(--t-accent-bg)] px-2 py-0.5">{t}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Appointments */}
-              <div>
-                <div className="flex items-center gap-4 mb-4">
-                  <p className="text-[10px] tracking-[0.3em] text-[var(--t-accent)]">預約紀錄</p>
-                  <div className="flex-1 h-px bg-[var(--t-border)]" />
-                  <p className="text-[10px] text-[var(--t-text-4)]">{detail.appointments.length} 筆</p>
-                </div>
-                {detail.appointments.length === 0 ? (
-                  <p className="text-[10px] text-[var(--t-text-4)] tracking-wide px-1">尚無預約紀錄</p>
-                ) : (
-                  <div className="bg-[var(--t-surface)] border border-[var(--t-border)]">
-                    <table className="w-full table-fixed">
-                      <colgroup><col /><col style={{width:'90px'}} /><col style={{width:'100px'}} /><col style={{width:'110px'}} /></colgroup>
-                      <tbody>
-                        {detail.appointments.map(a => (
-                          <tr key={a.id} className="border-b border-[var(--t-border)] last:border-0">
-                            <td className="px-7 py-3 text-xs font-light text-[var(--t-text)]">{a.service.name}</td>
-                            <td className="px-7 py-3 text-right text-[10px] text-[var(--t-text-4)]">
-                              {new Date(a.scheduledAt).toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })}
-                            </td>
-                            <td className={`px-7 py-3 text-right text-[10px] ${statusStyle[a.status] ?? 'text-[var(--t-text-3)]'}`}>
-                              {statusLabel[a.status] ?? a.status}
-                            </td>
-                            <td className="px-7 py-3 text-right text-xs text-[var(--t-text)] tabular-nums">
-                              {a.receipt ? `NT$ ${a.receipt.total.toLocaleString()}` : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
               </div>
             </div>
-          </div>
+            <div className="flex shrink-0 gap-2 border-t border-line-soft p-4">
+              <button onClick={() => openEdit(detail)} className={`${btnOutline} flex-1`}>編輯資料</button>
+              <button onClick={() => handleDelete(detail.id, detail.name)} className={btnDanger}>刪除</button>
+            </div>
+          </section>
         )}
       </div>
 
-      {/* Add / Edit modal */}
+      {/* ── 新增／編輯 ── */}
       {(adding || editing) && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--t-surface)] border border-[var(--t-border)] w-full max-w-sm p-8">
-            <div className="flex items-center justify-between mb-8">
-              <p className="text-[10px] tracking-[0.3em] text-[var(--t-text-2)] uppercase">{editing ? '編輯顧客' : '新增顧客'}</p>
-              <button onClick={() => { setAdding(false); setEditing(false) }} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none">×</button>
-            </div>
-            <div className="space-y-5">
-              {([
-                { label: '姓名', key: 'name' as const, placeholder: '王小明', type: 'text' },
-                { label: '電話', key: 'phone' as const, placeholder: '0912-345-678', type: 'text' },
-                { label: '生日', key: 'birthday' as const, placeholder: '1990-01-01', type: 'date' },
-                { label: '備註', key: 'note' as const, placeholder: '選填', type: 'text' },
-              ]).map(({ label, key, placeholder, type }) => (
-                <div key={key}>
-                  <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">{label}</label>
-                  <input type={type ?? 'text'} placeholder={placeholder} value={form[key]}
-                    onChange={e => setForm({ ...form, [key]: e.target.value })}
-                    className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors" />
-                </div>
-              ))}
-              <div>
-                <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">標籤</label>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {[...new Set<string>([...DEFAULT_CUSTOMER_TAGS, ...form.tags])].map(t => {
-                    const on = form.tags.includes(t)
-                    return (
-                      <button key={t} type="button" onClick={() => toggleTag(t)}
-                        className={`px-2.5 py-1 text-[11px] tracking-wide border transition-colors ${on ? 'border-[var(--t-accent)] bg-[var(--t-accent)] text-[var(--t-accent-fg)]' : 'border-[var(--t-border-s)] text-[var(--t-text-3)] hover:border-[var(--t-accent)]'}`}>
-                        {t}
-                      </button>
-                    )
-                  })}
-                </div>
-                <div className="flex items-center gap-2">
-                  <input value={customTag} onChange={e => setCustomTag(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag() } }}
-                    placeholder="自訂標籤"
-                    className="flex-1 bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-1.5 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors" />
-                  <button type="button" onClick={addCustomTag} disabled={!customTag.trim()}
-                    className="text-[10px] tracking-[0.2em] uppercase text-[var(--t-text-3)] hover:text-[var(--t-accent)] disabled:opacity-40 transition-colors">＋ 新增</button>
-                </div>
-              </div>
-            </div>
-            <button onClick={handleSave} disabled={saving}
-              className="w-full mt-8 border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] disabled:opacity-40 py-2.5 text-[10px] tracking-[0.25em] uppercase transition-all duration-200">
+        <Modal title={editing ? '編輯顧客' : '新增顧客'} onClose={() => { setAdding(false); setEditing(false) }}
+          footer={
+            <button onClick={handleSave} disabled={saving} className={`${btnPrimary} h-[50px] flex-1`}>
               {saving ? '儲存中' : editing ? '儲存變更' : '建立顧客'}
             </button>
-          </div>
-        </div>
+          }>
+          {([
+            { label: '姓名', key: 'name' as const, placeholder: '王小明', type: 'text' },
+            { label: '電話', key: 'phone' as const, placeholder: '0912345678', type: 'tel' },
+            { label: '生日（選填）', key: 'birthday' as const, placeholder: '', type: 'date' },
+            { label: '備註（選填）', key: 'note' as const, placeholder: '膚質、過敏、偏好', type: 'text' },
+          ]).map(({ label, key, placeholder, type }) => (
+            <FormField key={key} label={label} htmlFor={`cust-${key}`}>
+              <input id={`cust-${key}`} type={type} placeholder={placeholder} value={form[key]}
+                onChange={e => setForm({ ...form, [key]: e.target.value })} className={inputCls} />
+            </FormField>
+          ))}
+          <FormField label="標籤">
+            <div className="flex flex-wrap gap-2">
+              {[...new Set<string>([...DEFAULT_CUSTOMER_TAGS, ...form.tags])].map(t => {
+                const on = form.tags.includes(t)
+                return (
+                  <button key={t} type="button" onClick={() => toggleTag(t)} aria-pressed={on}
+                    className={`h-11 rounded-full px-4 text-[13px] transition-colors ${
+                      on ? 'bg-ink text-paper' : 'border border-border-input text-ink hover:bg-surface-muted'
+                    }`}>
+                    {t}
+                  </button>
+                )
+              })}
+            </div>
+            <div className="mt-1 flex items-center gap-2">
+              <input value={customTag} onChange={e => setCustomTag(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag() } }}
+                aria-label="自訂標籤" placeholder="自訂標籤" className={`${inputCls} flex-1`} />
+              <button type="button" onClick={addCustomTag} disabled={!customTag.trim()} className={btnOutline}>加入</button>
+            </div>
+          </FormField>
+        </Modal>
       )}
     </div>
+  )
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <span className="flex flex-1 flex-col gap-0.5">
+      <span className="text-xs text-ink-muted">{label}</span>
+      <span className="num text-[22px] font-semibold leading-tight text-ink">{value}</span>
+    </span>
   )
 }

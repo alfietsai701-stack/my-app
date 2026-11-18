@@ -1,222 +1,147 @@
-import { Calendar, Users, TrendingUp, Package, ChevronRight } from 'lucide-react'
-import Link from 'next/link'
 import { prisma } from '@/lib/prisma'
+import { getBusinessHours, isClosedOn } from '@/lib/business-hours'
+import DashboardView, { type DashboardData } from './DashboardView'
 
-const statusConfig: Record<string, { label: string; color: string; bg: string }> = {
-  confirmed: { label: '已確認', color: '#B99868', bg: 'rgba(185,152,104,0.14)' },
-  completed: { label: '已完成', color: '#6F8F74', bg: 'rgba(111,143,116,0.12)' },
-  cancelled:  { label: '已取消', color: '#B85C50', bg: 'rgba(184,92,80,0.10)' },
-}
+// 店在台灣，所有「今天／本週／本月」都以台北時間（UTC+8）為準，
+// 不依賴伺服器所在時區。
+const TZ_MS = 8 * 60 * 60 * 1000
+const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
-function pctLabel(curr: number, prev: number) {
-  if (prev === 0) return curr > 0 ? '本月開始累積' : '尚無資料'
-  const p = Math.round(((curr - prev) / prev) * 100)
-  if (p === 0) return '與上月持平'
-  return p > 0 ? `↑ 較上月 +${p}%` : `↓ 較上月 ${p}%`
+/** 把真實時間轉成台北的「牆上時鐘」，之後用 getUTC* 讀年月日時分 */
+function wall(d: Date) { return new Date(d.getTime() + TZ_MS) }
+/** 台北時間某年月日 00:00 對應的真實時間（month 可超出 0–11，會自動進位） */
+function tpe(y: number, m: number, d: number) { return new Date(Date.UTC(y, m, d) - TZ_MS) }
+const pad = (n: number) => String(n).padStart(2, '0')
+
+type TodayRow = {
+  id: string
+  scheduledAt: Date
+  status: string
+  customer: { name: string }
+  service: { name: string; durationMin: number }
 }
+type ReceiptRow = { total: number; appointment: { service: { category: string } } }
+type StockRow = { id: string; name: string; category: string; quantity: number; alertLevel: number; unit: string }
 
 export default async function DashboardPage() {
   const now = new Date()
-  const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  const lastMonthEnd   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
+  const w = wall(now)
+  const [y, mo, day, dow] = [w.getUTCFullYear(), w.getUTCMonth(), w.getUTCDate(), w.getUTCDay()]
+
+  const todayStart     = tpe(y, mo, day)
+  const tomorrowStart  = tpe(y, mo, day + 1)
+  const thisMonthStart = tpe(y, mo, 1)
+  const nextMonthStart = tpe(y, mo + 1, 1)
+  const lastMonthStart = tpe(y, mo - 1, 1)
+  const mondayOffset   = (dow + 6) % 7 // 週一為一週的開始
+  const weekStart      = tpe(y, mo, day - mondayOffset)
+  const weekEnd        = tpe(y, mo, day - mondayOffset + 7)
 
   const [
-    receiptsThis, receiptsLast,
-    apptCountThis, apptCountLast, apptCountCompleted,
-    customerCount, newCustomerCount,
-    inventoryItems,
-    recentAppts,
+    receiptsThis, receiptsLast, apptCountThis,
+    monthAppts, todayAppts, weekAppts, inventoryItems, hours,
   ] = await Promise.all([
-    prisma.receipt.aggregate({ where: { paidAt: { gte: thisMonthStart } }, _sum: { total: true } }),
-    prisma.receipt.aggregate({ where: { paidAt: { gte: lastMonthStart, lte: lastMonthEnd } }, _sum: { total: true } }),
-    prisma.appointment.count({ where: { scheduledAt: { gte: thisMonthStart }, status: { not: 'cancelled' } } }),
-    prisma.appointment.count({ where: { scheduledAt: { gte: lastMonthStart, lte: lastMonthEnd }, status: { not: 'cancelled' } } }),
-    prisma.appointment.count({ where: { scheduledAt: { gte: thisMonthStart }, status: 'completed' } }),
-    prisma.customer.count({ where: { deletedAt: null } }),
-    prisma.customer.count({ where: { deletedAt: null, createdAt: { gte: thisMonthStart } } }),
-    prisma.inventoryItem.findMany({ select: { quantity: true, alertLevel: true } }),
+    prisma.receipt.findMany({
+      where: { paidAt: { gte: thisMonthStart, lt: nextMonthStart } },
+      select: { total: true, appointment: { select: { service: { select: { category: true } } } } },
+    }),
+    prisma.receipt.aggregate({ where: { paidAt: { gte: lastMonthStart, lt: thisMonthStart } }, _sum: { total: true } }),
+    prisma.appointment.count({ where: { scheduledAt: { gte: thisMonthStart, lt: nextMonthStart }, status: { not: 'cancelled' } } }),
     prisma.appointment.findMany({
-      where: { scheduledAt: { gte: new Date(now.setHours(0,0,0,0)) } },
+      where: { scheduledAt: { gte: thisMonthStart, lt: nextMonthStart }, status: { not: 'cancelled' } },
+      select: { service: { select: { name: true } } },
+    }),
+    prisma.appointment.findMany({
+      where: { scheduledAt: { gte: todayStart, lt: tomorrowStart } },
       orderBy: { scheduledAt: 'asc' },
-      take: 6,
-      include: {
+      select: {
+        id: true, scheduledAt: true, status: true,
         customer: { select: { name: true } },
-        service:  { select: { name: true } },
+        service:  { select: { name: true, durationMin: true } },
       },
     }),
+    prisma.appointment.findMany({
+      where: { scheduledAt: { gte: weekStart, lt: weekEnd }, status: { not: 'cancelled' } },
+      select: { scheduledAt: true },
+    }),
+    prisma.inventoryItem.findMany({
+      select: { id: true, name: true, category: true, quantity: true, alertLevel: true, unit: true },
+      orderBy: { quantity: 'asc' },
+    }),
+    getBusinessHours(),
   ])
 
-  const revenueThis = receiptsThis._sum.total ?? 0
-  const revenueLast = receiptsLast._sum.total ?? 0
-  const lowStockCount = inventoryItems.filter(i => i.quantity <= i.alertLevel).length
+  // 本月營收與各分類占比
+  const revenueThis = (receiptsThis as ReceiptRow[]).reduce((sum: number, r: ReceiptRow) => sum + r.total, 0)
+  const byCategory = new Map<string, number>()
+  for (const r of receiptsThis as ReceiptRow[]) {
+    const c = r.appointment.service.category
+    byCategory.set(c, (byCategory.get(c) ?? 0) + r.total)
+  }
+  const sortedCats = [...byCategory.entries()].sort((a, b) => b[1] - a[1])
+  const shareRows = sortedCats.length > 4
+    ? [...sortedCats.slice(0, 3), ['其他', sortedCats.slice(3).reduce((s, c) => s + c[1], 0)] as [string, number]]
+    : sortedCats
+  const categoryShare = revenueThis > 0
+    ? shareRows.map(([name, total]) => ({ name, pct: Math.round((total / revenueThis) * 100) }))
+    : []
 
-  const statsCards = [
-    {
-      label: '本月收入',
-      value: revenueThis > 0 ? `NT$ ${revenueThis.toLocaleString()}` : '—',
-      sub: pctLabel(revenueThis, revenueLast),
-      icon: TrendingUp,
-      iconColor: '#B99868',
-      iconBg: 'rgba(185,152,104,0.14)',
-      href: '/reports',
-      highlight: true,
-    },
-    {
-      label: '本月預約',
-      value: apptCountThis > 0 ? `${apptCountThis} 筆` : '—',
-      sub: apptCountThis > 0 ? `已完成 ${apptCountCompleted} 筆` : pctLabel(apptCountThis, apptCountLast),
-      icon: Calendar,
-      iconColor: '#7E6047',
-      iconBg: 'rgba(126,96,71,0.12)',
-      href: '/appointments',
-    },
-    {
-      label: '顧客總數',
-      value: customerCount > 0 ? `${customerCount} 位` : '—',
-      sub: newCustomerCount > 0 ? `本月新增 ${newCustomerCount} 位` : '本月無新增',
-      icon: Users,
-      iconColor: '#6F8F74',
-      iconBg: 'rgba(111,143,116,0.12)',
-      href: '/customers',
-    },
-    {
-      label: '低庫存品項',
-      value: `${lowStockCount} 項`,
-      sub: lowStockCount > 0 ? '⚠ 需要補貨' : '庫存充足',
-      icon: Package,
-      iconColor: lowStockCount > 0 ? '#B85C50' : '#B8842B',
-      iconBg: lowStockCount > 0 ? 'rgba(184,92,80,0.10)' : 'rgba(184,132,43,0.12)',
-      href: '/inventory',
-      warn: lowStockCount > 0,
-    },
-  ]
+  // 本月最多人做的服務
+  const serviceCount = new Map<string, number>()
+  for (const a of monthAppts as { service: { name: string } }[]) {
+    serviceCount.set(a.service.name, (serviceCount.get(a.service.name) ?? 0) + 1)
+  }
+  const topServices = [...serviceCount.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([name, count]) => ({ name, count }))
 
-  const fmtTime = (d: Date) => d.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false })
-  const fmtDateLabel = (d: Date) => {
-    const today = new Date(); today.setHours(0,0,0,0)
-    const tomorrow = new Date(today); tomorrow.setDate(today.getDate() + 1)
-    const apptDay = new Date(d); apptDay.setHours(0,0,0,0)
-    const prefix = apptDay.getTime() === today.getTime()
-      ? '今日' : apptDay.getTime() === tomorrow.getTime()
-      ? '明日' : d.toLocaleDateString('zh-TW', { month: 'numeric', day: 'numeric' })
-    return `${prefix} ${fmtTime(d)}`
+  // 本週每天的預約數（週一到週日）
+  const weekCounts = Array<number>(7).fill(0)
+  for (const a of weekAppts as { scheduledAt: Date }[]) {
+    const idx = Math.floor((a.scheduledAt.getTime() - weekStart.getTime()) / (24 * 60 * 60 * 1000))
+    if (idx >= 0 && idx < 7) weekCounts[idx]++
+  }
+  const week = weekCounts.map((count, i) => {
+    const d = wall(tpe(y, mo, day - mondayOffset + i))
+    const dateStr = `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+    return {
+      label: WEEKDAYS[d.getUTCDay()],
+      count,
+      isToday: i === mondayOffset,
+      closed: count === 0 && isClosedOn(dateStr, hours),
+    }
+  })
+
+  const lowAll = (inventoryItems as StockRow[]).filter((i: StockRow) => i.quantity <= i.alertLevel)
+
+  const data: DashboardData = {
+    dateLabel: `${mo + 1}/${day} 週${WEEKDAYS[dow]}`,
+    today: (todayAppts as TodayRow[]).map((a: TodayRow) => {
+      const t = wall(a.scheduledAt)
+      return {
+        id: a.id,
+        time: `${pad(t.getUTCHours())}:${pad(t.getUTCMinutes())}`,
+        customerName: a.customer.name,
+        serviceName: a.service.name,
+        durationMin: a.service.durationMin,
+        status: a.status,
+        past: a.scheduledAt.getTime() < now.getTime(),
+      }
+    }),
+    revenueThis,
+    revenueLast: receiptsLast._sum.total ?? 0,
+    apptCountThis,
+    categoryShare,
+    topServices,
+    week,
+    lowStock: lowAll.slice(0, 3).map(({ id, name, category, quantity, unit }: StockRow) => ({ id, name, category, quantity, unit })),
+    lowStockCount: lowAll.length,
   }
 
-  const monthLabel = `${now.getFullYear()} 年 ${now.getMonth() + 1} 月`
-
   return (
-    <div className="flex flex-col flex-1 overflow-hidden">
-      {/* ── Header ── */}
-      <div className="shrink-0 px-5 lg:px-8 py-5 lg:py-6" style={{ background: 'var(--t-surface)', borderBottom: '1px solid var(--t-border)' }}>
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold" style={{ color: 'var(--t-text)' }}>總覽</h1>
-            <p className="text-sm mt-0.5" style={{ color: 'var(--t-text-4)' }}>{monthLabel}</p>
-          </div>
-          <Link href="/appointments"
-            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
-            style={{ background: 'var(--t-accent)', color: 'var(--t-accent-fg)' }}>
-            + 新增預約
-          </Link>
-        </div>
-      </div>
-
-      <main className="flex-1 overflow-auto px-5 lg:px-8 py-5 lg:py-6" style={{ background: 'var(--t-bg)' }}>
-
-        {/* ── Stats grid ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {statsCards.map(({ label, value, sub, icon: Icon, iconColor, iconBg, href, highlight, warn }) => (
-            <Link key={label} href={href}
-              className="rounded-2xl p-5 block transition-all hover:scale-[1.01]"
-              style={{ background: 'var(--t-surface)', boxShadow: 'var(--t-shadow)' }}>
-              <div className="flex items-start justify-between mb-4">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                  style={{ background: iconBg }}>
-                  <Icon size={18} strokeWidth={2} style={{ color: iconColor }} />
-                </div>
-                <ChevronRight size={14} strokeWidth={2} style={{ color: 'var(--t-text-4)' }} />
-              </div>
-              <p className="text-2xl font-bold mb-1" style={{
-                color: warn ? '#DC2626' : highlight ? 'var(--t-accent)' : 'var(--t-text)',
-              }}>
-                {value}
-              </p>
-              <p className="text-xs" style={{ color: 'var(--t-text-4)' }}>{label}</p>
-              <p className="text-[11px] mt-1 font-medium" style={{
-                color: warn ? '#DC2626' : sub.startsWith('↑') ? '#059669' : sub.startsWith('↓') ? '#DC2626' : 'var(--t-text-3)',
-              }}>
-                {sub}
-              </p>
-            </Link>
-          ))}
-        </div>
-
-        {/* ── Upcoming appointments ── */}
-        <div className="rounded-2xl overflow-hidden" style={{ background: 'var(--t-surface)', boxShadow: 'var(--t-shadow)' }}>
-          <div className="px-5 lg:px-6 py-4 flex items-center justify-between"
-            style={{ borderBottom: '1px solid var(--t-border)' }}>
-            <div>
-              <h2 className="text-sm font-semibold" style={{ color: 'var(--t-text)' }}>今日以後預約</h2>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--t-text-4)' }}>最近 6 筆</p>
-            </div>
-            <Link href="/appointments"
-              className="text-xs font-medium flex items-center gap-1 transition-colors"
-              style={{ color: 'var(--t-accent)' }}>
-              查看全部 <ChevronRight size={13} strokeWidth={2} />
-            </Link>
-          </div>
-
-          {recentAppts.length === 0 ? (
-            <div className="px-6 py-12 text-center">
-              <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-4"
-                style={{ background: 'var(--t-elevated)' }}>
-                <Calendar size={22} strokeWidth={1.5} style={{ color: 'var(--t-text-4)' }} />
-              </div>
-              <p className="text-sm font-medium" style={{ color: 'var(--t-text-3)' }}>尚無預約</p>
-              <p className="text-xs mt-1" style={{ color: 'var(--t-text-4)' }}>點擊「新增預約」建立第一筆</p>
-            </div>
-          ) : (
-            <div className="divide-y" style={{ borderColor: 'var(--t-border)' }}>
-              {recentAppts.map((appt) => {
-                const cfg = statusConfig[appt.status] ?? statusConfig.confirmed
-                return (
-                  <div key={appt.id} className="flex items-center gap-4 px-5 lg:px-6 py-4 hover:bg-[var(--t-elevated)] transition-colors">
-                    {/* Time block */}
-                    <div className="w-14 shrink-0 text-center">
-                      <p className="text-sm font-bold tabular-nums" style={{ color: 'var(--t-text)' }}>
-                        {fmtTime(appt.scheduledAt)}
-                      </p>
-                      <p className="text-[10px] mt-0.5" style={{ color: 'var(--t-text-4)' }}>
-                        {fmtDateLabel(appt.scheduledAt).split(' ')[0]}
-                      </p>
-                    </div>
-
-                    {/* Divider */}
-                    <div className="w-px h-8 shrink-0" style={{ background: 'var(--t-border)' }} />
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--t-text)' }}>
-                        {appt.customer.name}
-                      </p>
-                      <p className="text-xs mt-0.5 truncate" style={{ color: 'var(--t-text-3)' }}>
-                        {appt.service.name}
-                      </p>
-                    </div>
-
-                    {/* Status badge */}
-                    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full shrink-0"
-                      style={{ color: cfg.color, background: cfg.bg }}>
-                      {cfg.label}
-                    </span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </main>
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <DashboardView data={data} />
     </div>
   )
 }

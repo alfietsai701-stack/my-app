@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useSyncExternalStore } from 'react'
 import { ChevronLeft, ChevronRight, Plus, X } from 'lucide-react'
 
 type Customer = { id: string; name: string; phone: string }
@@ -11,14 +11,25 @@ type Appt = {
   receipt: { total: number; payMethod: string } | null
 }
 
+// 預約狀態色（對應設計系統：已確認＝status-confirmed、已完成＝status-done）
 const STATUS = {
-  confirmed: { label: '已確認', color: '#B99868', bg: 'rgba(185,152,104,0.14)', border: 'rgba(185,152,104,0.34)' },
-  completed: { label: '已完成', color: '#6F8F74', bg: 'rgba(111,143,116,0.12)', border: 'rgba(111,143,116,0.32)' },
-  cancelled:  { label: '已取消', color: '#9CA3AF', bg: 'rgba(156,163,175,0.08)', border: 'rgba(156,163,175,0.25)' },
+  confirmed: { label: '已確認', color: '#26332A', bg: '#B9C9B5', border: '#B9C9B5' },
+  completed: { label: '已完成', color: '#4A4A45', bg: '#DCDCD5', border: '#DCDCD5' },
+  cancelled:  { label: '已取消', color: '#5C5C56', bg: '#F4F4EF', border: '#D3D3CB' },
 }
+// 側欄／手機底部的「建立新預約」已在本頁時，用這個事件直接打開新增視窗
+const NEW_APPT_EVENT = 'ada:new-appointment'
 const PAY_METHODS = ['現金', '信用卡', 'Line Pay', '轉帳']
 const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六']
 const BUFFER_MIN = 60
+
+// 手機預設看「日」（週曆在窄螢幕太擠），電腦預設看「週」
+const MOBILE_QUERY = '(max-width: 1023px)'
+function subscribeMobile(cb: () => void) {
+  const mq = window.matchMedia(MOBILE_QUERY)
+  mq.addEventListener('change', cb)
+  return () => mq.removeEventListener('change', cb)
+}
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -85,7 +96,9 @@ export default function AppointmentsClient({
 }) {
   const today = toDateStr(new Date())
 
-  const [view, setView]           = useState<'month'|'week'|'day'>('week')
+  const [viewPref, setView]       = useState<'month'|'week'|'day'|null>(null)
+  const isMobile = useSyncExternalStore(subscribeMobile, () => window.matchMedia(MOBILE_QUERY).matches, () => false)
+  const view = viewPref ?? (isMobile ? 'day' : 'week')
   const [weekStart, setWeekStart] = useState(() => getMonday(new Date()))
   const [date, setDate]           = useState(today)
   const [month, setMonth]         = useState(toMonthStr(new Date()))
@@ -220,6 +233,23 @@ export default function AppointmentsClient({
 
   const selectedCustomer = customers.find(c => c.id === form.customerId)
 
+  // 「建立新預約」捷徑：已在本頁時收事件；從別頁帶 ?new=1 進來時，載入後打開新增視窗
+  useEffect(() => {
+    const open = () => openAdd()
+    window.addEventListener(NEW_APPT_EVENT, open)
+    return () => window.removeEventListener(NEW_APPT_EVENT, open)
+  })
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('new') !== '1') return
+    const t = setTimeout(() => {
+      window.history.replaceState(null, '', window.location.pathname)
+      openAdd()
+    }, 0)
+    return () => clearTimeout(t)
+    // 只在進頁面時檢查一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // block form
   const [blockForm, setBlockForm] = useState({ date: today, start: slots[0]??'11:00', end: slots[0]??'12:00', note: '' })
   const [creatingBlock, setCreatingBlock] = useState(false)
@@ -263,7 +293,7 @@ export default function AppointmentsClient({
         {!blocked && cellAppts.length === 0 && (
           <button onClick={() => openAdd(ds, slot)}
             className="absolute inset-0.5 rounded-md opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center"
-            style={{ border: '1.5px dashed rgba(185,152,104,0.30)', background: 'rgba(185,152,104,0.08)' }}>
+            style={{ border: '1.5px dashed #8A8A82', background: '#F4F4EF' }}>
             <Plus size={13} strokeWidth={2.5} style={{ color: 'var(--t-accent)' }} />
           </button>
         )}
@@ -296,18 +326,18 @@ export default function AppointmentsClient({
     <div className="flex flex-col flex-1 overflow-hidden">
 
       {/* ── header ── */}
-      <div className="shrink-0 flex items-center justify-between gap-3 px-4 lg:px-6 h-14"
-        style={{ background:'var(--t-surface)', borderBottom:'1px solid var(--t-border)' }}>
+      <div className="shrink-0 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 lg:px-5 py-3"
+        style={{ background:'var(--t-bg)' }}>
 
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
           {/* View tabs */}
-          <div className="flex rounded-xl p-0.5 gap-0.5" style={{ background:'var(--t-elevated)' }}>
-            {(['month','week','day'] as const).map(v => (
-              <button key={v} onClick={() => setView(v)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+          <div role="tablist" aria-label="檢視方式" className="flex rounded-full p-1 mr-1" style={{ background:'var(--t-surface)' }}>
+            {(['day','week','month'] as const).map(v => (
+              <button key={v} role="tab" aria-selected={view===v} onClick={() => setView(v)}
+                className="h-10 min-w-11 px-3.5 rounded-full text-[13px] transition-colors"
                 style={view===v
-                  ? { background:'var(--t-surface)', color:'var(--t-accent)', boxShadow:'0 1px 3px rgba(0,0,0,0.10)' }
-                  : { color:'var(--t-text-3)' }}>
+                  ? { background:'var(--t-accent)', color:'var(--t-accent-fg)', fontWeight:500 }
+                  : { color:'var(--t-text)' }}>
                 {v==='month'?'月':v==='week'?'週':'日'}
               </button>
             ))}
@@ -317,7 +347,8 @@ export default function AppointmentsClient({
           {(['prev','label','next'] as const).map(part => {
             if (part === 'label') return (
               <button key="label" onClick={() => { const n=new Date(); setWeekStart(getMonday(n)); setDate(toDateStr(n)); setMonth(toMonthStr(n)) }}
-                className="text-sm font-semibold min-w-[120px] text-center truncate hidden sm:block"
+                title="回到今天"
+                className="font-heading text-base lg:text-xl font-semibold min-w-[104px] lg:min-w-[150px] text-center truncate tracking-wide"
                 style={{ color:'var(--t-text)' }}>
                 {view==='week' ? weekLabel : view==='month'
                   ? `${calYear} 年 ${calMonth} 月`
@@ -331,27 +362,28 @@ export default function AppointmentsClient({
               else { const d=new Date(date+'T00:00:00'); d.setDate(d.getDate()+dir); setDate(toDateStr(d)) }
             }
             return (
-              <button key={part} onClick={shift} className="p-1.5 rounded-lg shrink-0" style={{ color:'var(--t-text-4)' }}
-                onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='var(--t-elevated)'}
-                onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}>
+              <button key={part} onClick={shift} aria-label={part==='prev' ? '往前' : '往後'}
+                className="size-11 flex items-center justify-center rounded-full shrink-0 transition-colors hover:bg-[var(--t-elevated)]"
+                style={{ color:'var(--t-text)', background:'var(--t-surface)' }}>
                 {part==='prev' ? <ChevronLeft size={16} strokeWidth={2}/> : <ChevronRight size={16} strokeWidth={2}/>}
               </button>
             )
           })}
         </div>
 
-        <button onClick={() => openAdd()}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-semibold shrink-0 transition-all"
-          style={{ background:'var(--t-accent)', color:'#fff' }}>
-          <Plus size={14} strokeWidth={2.5}/>
-          <span className="hidden sm:inline">新增預約</span>
-          <span className="sm:hidden">新增</span>
-        </button>
-        <button onClick={() => openAddBlock()}
-          className="ml-2 flex items-center gap-1 px-3 py-2 rounded-xl text-sm font-medium shrink-0 transition-all"
-          style={{ background:'var(--t-elevated)', color:'var(--t-text-3)', border:'1px solid var(--t-border)' }}>
-          新增休假
-        </button>
+        <div className="flex items-center gap-2 ml-auto">
+          <button onClick={() => openAddBlock()}
+            className="h-11 flex items-center px-4 rounded-full text-[13px] shrink-0 transition-colors hover:bg-[var(--t-elevated)]"
+            style={{ background:'var(--t-surface)', color:'var(--t-text)' }}>
+            新增休假
+          </button>
+          {/* 手機版由底部選單的 ＋ 建立預約，這顆只在電腦版出現 */}
+          <button onClick={() => openAdd()}
+            className="hidden lg:flex h-11 items-center gap-1.5 px-5 rounded-full text-sm font-medium shrink-0 transition-colors"
+            style={{ background:'var(--t-accent)', color:'var(--t-accent-fg)' }}>
+            <Plus size={15} strokeWidth={2}/>新增預約
+          </button>
+        </div>
       </div>
 
       {/* ── body ── */}
@@ -359,34 +391,34 @@ export default function AppointmentsClient({
 
         {/* ══ WEEK VIEW ══ */}
         {view==='week' && (
-          <div className={`flex flex-col flex-1 overflow-hidden ${selected ? 'hidden lg:flex' : ''}`}
+          <div className={`flex flex-col flex-1 overflow-hidden px-4 lg:px-5 pb-3 lg:pb-5 ${selected ? 'hidden lg:flex' : ''}`}
             style={{ background:'var(--t-bg)' }}>
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-auto rounded-2xl" style={{ background:'var(--t-surface)' }}>
               <div className="min-w-[580px]">
 
                 {/* Day header row */}
                 <div className="sticky top-0 z-10 grid border-b"
-                  style={{ gridTemplateColumns:'56px repeat(7,minmax(0,1fr))', background:'var(--t-surface)', borderColor:'var(--t-border)' }}>
-                  <div className="border-r" style={{ borderColor:'var(--t-border)' }}/>
+                  style={{ gridTemplateColumns:'56px repeat(7,minmax(0,1fr))', background:'var(--t-surface)', borderColor:'var(--color-line-soft)' }}>
+                  <div className="border-r" style={{ borderColor:'var(--color-line-soft)' }}/>
                   {weekDays.map(day => {
                     const ds = toDateStr(day)
                     const isToday = ds===today
                     const cnt = (byDate[ds]??[]).filter(a=>a.status!=='cancelled').length
                     return (
                       <div key={ds} className="flex flex-col items-center py-2.5 border-r last:border-r-0"
-                        style={{ borderColor:'var(--t-border)', background: isToday?'rgba(185,152,104,0.08)':'' }}>
-                        <span className="text-[11px] mb-1" style={{ color: day.getDay()===0?'#DC2626':'var(--t-text-4)' }}>
+                        style={{ borderColor:'var(--color-line-soft)', background: isToday?'#F7F7F3':'' }}>
+                        <span className="text-[11px] mb-1" style={{ color: day.getDay()===0?'var(--t-danger)':'var(--t-text-4)' }}>
                           {WEEKDAY_LABELS[day.getDay()]}
                         </span>
                         <span className="w-8 h-8 flex items-center justify-center rounded-full text-sm font-bold"
                           style={isToday
-                            ? { background:'var(--t-accent)', color:'#fff' }
-                            : { color: day.getDay()===0?'#DC2626':'var(--t-text)' }}>
+                            ? { background:'var(--t-accent)', color:'var(--t-accent-fg)' }
+                            : { color: day.getDay()===0?'var(--t-danger)':'var(--t-text)' }}>
                           {day.getDate()}
                         </span>
                         {cnt > 0 && (
                           <span className="mt-1 text-[10px] font-medium px-1.5 rounded-full"
-                            style={{ background:'rgba(185,152,104,0.14)', color:'var(--t-accent)' }}>{cnt}</span>
+                            style={{ background:'var(--t-accent-bg)', color:'var(--t-accent)' }}>{cnt}</span>
                         )}
                       </div>
                     )
@@ -396,10 +428,10 @@ export default function AppointmentsClient({
                 {/* Slot rows */}
                 {slots.map(slot => (
                   <div key={slot} className="grid border-b"
-                    style={{ gridTemplateColumns:'56px repeat(7,minmax(0,1fr))', borderColor:'var(--t-border)', minHeight:64 }}>
+                    style={{ gridTemplateColumns:'56px repeat(7,minmax(0,1fr))', borderColor:'var(--color-line-soft)', minHeight:64 }}>
                     <div className="border-r flex items-start justify-center pt-2 shrink-0"
-                      style={{ borderColor:'var(--t-border)' }}>
-                      <span className="text-[11px] tabular-nums font-medium" style={{ color:'var(--t-text-4)' }}>{slot}</span>
+                      style={{ borderColor:'var(--color-line-soft)' }}>
+                      <span className="num text-[15px]" style={{ color:'var(--t-text-3)' }}>{slot}</span>
                     </div>
                     {weekDays.map(day => {
                       const ds = toDateStr(day)
@@ -407,7 +439,7 @@ export default function AppointmentsClient({
                       const blocked  = calcBlocked(dayAppts, slots).has(slot) || isManuallyBlocked(ds, slot)
                       return (
                         <div key={ds} className="border-r last:border-r-0"
-                          style={{ borderColor:'var(--t-border)', background: blocked?'rgba(0,0,0,0.02)': toDateStr(day)===today?'rgba(185,152,104,0.06)':'' }}>
+                          style={{ borderColor:'var(--color-line-soft)', background: blocked?'rgba(0,0,0,0.02)': toDateStr(day)===today?'#F7F7F3':'' }}>
                           <CellSlot ds={ds} slot={slot} dayAppts={dayAppts} blocked={blocked}/>
                         </div>
                       )
@@ -421,32 +453,19 @@ export default function AppointmentsClient({
 
         {/* ══ DAY VIEW ══ */}
         {view==='day' && (
-          <div className={`flex flex-col flex-1 overflow-hidden ${selected ? 'hidden lg:flex' : ''}`}>
-            <div className="flex items-center justify-between px-4 py-2.5 shrink-0"
-              style={{ background:'var(--t-surface)', borderBottom:'1px solid var(--t-border)' }}>
-              <button onClick={() => { const d=new Date(date+'T00:00:00'); d.setDate(d.getDate()-1); setDate(toDateStr(d)) }}
-                className="p-1.5 rounded-lg" style={{ color:'var(--t-text-3)' }}>
-                <ChevronLeft size={15} strokeWidth={2}/>
-              </button>
-              <p className="text-sm font-semibold" style={{ color:'var(--t-text)' }}>
-                {new Date(date+'T00:00:00').toLocaleDateString('zh-TW',{month:'long',day:'numeric',weekday:'long'})}
-              </p>
-              <button onClick={() => { const d=new Date(date+'T00:00:00'); d.setDate(d.getDate()+1); setDate(toDateStr(d)) }}
-                className="p-1.5 rounded-lg" style={{ color:'var(--t-text-3)' }}>
-                <ChevronRight size={15} strokeWidth={2}/>
-              </button>
-            </div>
-            <div className="flex-1 overflow-auto" style={{ background:'var(--t-bg)' }}>
+          <div className={`flex flex-col flex-1 overflow-hidden px-4 lg:px-5 pb-3 lg:pb-5 ${selected ? 'hidden lg:flex' : ''}`}
+            style={{ background:'var(--t-bg)' }}>
+            <div className="flex-1 overflow-auto rounded-2xl" style={{ background:'var(--t-surface)' }}>
               {slots.map(slot => {
                 const dayAppts = byDate[date]??[]
                 const cellAppts = dayAppts.filter(a => apptMatchesSlot(a, slot))
                 const blocked   = calcBlocked(dayAppts, slots).has(slot) || isManuallyBlocked(date, slot)
                 return (
                   <div key={slot} className="flex border-b group"
-                    style={{ borderColor:'var(--t-border)', minHeight:72 }}>
+                    style={{ borderColor:'var(--color-line-soft)', minHeight:72 }}>
                     <div className="w-16 shrink-0 flex items-start justify-center pt-3 border-r"
-                      style={{ borderColor:'var(--t-border)', background: blocked?'rgba(0,0,0,0.015)':'' }}>
-                      <span className="text-xs tabular-nums font-medium" style={{ color:'var(--t-text-4)' }}>{slot}</span>
+                      style={{ borderColor:'var(--color-line-soft)', background: blocked?'rgba(0,0,0,0.015)':'' }}>
+                      <span className="num text-base" style={{ color:'var(--t-text-3)' }}>{slot}</span>
                     </div>
                     <div className="flex-1 p-2 relative">
                       {cellAppts.map(a => {
@@ -500,7 +519,7 @@ export default function AppointmentsClient({
               <div className="grid grid-cols-7 mb-1">
                 {WEEKDAY_LABELS.map((w,i) => (
                   <div key={w} className="text-center py-1.5 text-xs font-medium"
-                    style={{ color: i===0?'#DC2626':'var(--t-text-4)' }}>{w}</div>
+                    style={{ color: i===0?'var(--t-danger)':'var(--t-text-4)' }}>{w}</div>
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-1.5">
@@ -512,15 +531,15 @@ export default function AppointmentsClient({
                     <div key={i} onClick={() => { setDate(ds); setView('day') }}
                       className="rounded-xl p-2 cursor-pointer transition-all hover:scale-[1.015]"
                       style={{ background:'var(--t-surface)', boxShadow:'var(--t-shadow)', minHeight:80, opacity: isThisMonth?1:0.3,
-                        border: ds===date?'1.5px solid rgba(185,152,104,0.36)':'1.5px solid transparent' }}>
+                        border: ds===date?'1.5px solid #1C1C1A':'1.5px solid transparent' }}>
                       <div className="flex items-center justify-between mb-1">
                         <span className="w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold"
-                          style={isToday?{ background:'var(--t-accent)', color:'#fff' }:{ color: d.getDay()===0?'#DC2626':'var(--t-text-3)' }}>
+                          style={isToday?{ background:'var(--t-accent)', color:'var(--t-accent-fg)' }:{ color: d.getDay()===0?'var(--t-danger)':'var(--t-text-3)' }}>
                           {d.getDate()}
                         </span>
                         {activeCount>0 && (
                           <span className="text-[9px] font-semibold px-1 rounded-full"
-                            style={{ background:'rgba(185,152,104,0.14)', color:'var(--t-accent)' }}>{activeCount}</span>
+                            style={{ background:'var(--t-accent-bg)', color:'var(--t-accent)' }}>{activeCount}</span>
                         )}
                       </div>
                       <div className="space-y-0.5">
@@ -585,7 +604,7 @@ export default function AppointmentsClient({
                 {selected.receipt && (
                   <div className="flex gap-3 pt-3" style={{ borderTop:'1px solid var(--t-border)' }}>
                     <p className="text-xs font-medium w-16 shrink-0 mt-0.5" style={{ color:'var(--t-text-4)' }}>付款</p>
-                    <p className="text-sm font-semibold" style={{ color:'#059669' }}>
+                    <p className="text-sm font-semibold" style={{ color:'var(--t-success)' }}>
                       {selected.receipt.payMethod}　NT$ {selected.receipt.total.toLocaleString()}
                     </p>
                   </div>
@@ -595,12 +614,12 @@ export default function AppointmentsClient({
               {selected.status==='confirmed' && (
                 <div className="space-y-2">
                   <button onClick={() => { setPayForm({ total: String(selected.service.price), payMethod: PAY_METHODS[0] }); setPaying(true) }}
-                    className="w-full py-3 rounded-xl text-sm font-semibold"
-                    style={{ background:'var(--t-accent)', color:'#fff' }}>
+                    className="w-full py-3 rounded-full text-sm font-medium"
+                    style={{ background:'var(--t-accent)', color:'var(--t-accent-fg)' }}>
                     確認完成並結帳
                   </button>
                   <button onClick={() => handleStatus(selected.id,'cancelled')}
-                    className="w-full py-3 rounded-xl text-sm font-medium"
+                    className="w-full py-3 rounded-full text-sm font-medium"
                     style={{ background:'var(--t-elevated)', color:'var(--t-text-3)', border:'1.5px solid var(--t-border)' }}>
                     取消預約
                   </button>
@@ -608,8 +627,8 @@ export default function AppointmentsClient({
               )}
               {selected.status!=='confirmed' && (
                 <button onClick={() => handleDelete(selected.id)}
-                  className="w-full py-3 rounded-xl text-sm font-medium"
-                  style={{ background:'rgba(220,38,38,0.07)', color:'#DC2626', border:'1.5px solid rgba(220,38,38,0.20)' }}>
+                  className="w-full py-3 rounded-full text-sm font-medium"
+                  style={{ background:'var(--t-danger-bg)', color:'var(--t-danger)', border:'1.5px solid var(--t-danger-bg)' }}>
                   刪除紀錄
                 </button>
               )}
@@ -621,7 +640,7 @@ export default function AppointmentsClient({
       {/* ══ ADD MODAL ══ */}
       {adding && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-          style={{ background:'rgba(15,30,56,0.45)', backdropFilter:'blur(4px)' }}
+          style={{ background:'rgba(28,28,26,0.4)' }}
           onClick={() => setAdding(false)}>
           <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl overflow-y-auto max-h-[90vh]"
             style={{ background:'var(--t-surface)', boxShadow:'var(--t-shadow-md)' }}
@@ -642,7 +661,7 @@ export default function AppointmentsClient({
                 <label className="block text-xs font-semibold mb-2" style={{ color:'var(--t-text-3)' }}>顧客</label>
                 {selectedCustomer ? (
                   <div className="flex items-center justify-between rounded-xl px-4 py-3"
-                    style={{ background:'rgba(185,152,104,0.10)', border:'1.5px solid rgba(185,152,104,0.24)' }}>
+                    style={{ background:'var(--t-elevated)', border:'1.5px solid var(--t-border)' }}>
                     <div>
                       <p className="text-sm font-semibold" style={{ color:'var(--t-text)' }}>{selectedCustomer.name}</p>
                       <p className="text-xs" style={{ color:'var(--t-text-4)' }}>{selectedCustomer.phone}</p>
@@ -663,8 +682,8 @@ export default function AppointmentsClient({
                     ))}
                     <div className="flex gap-2 pt-1">
                       <button onClick={handleCreateCustomer} disabled={saving||!newCust.name||!newCust.phone}
-                        className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
-                        style={{ background:'var(--t-accent)', color:'#fff' }}>{saving?'建立中…':'建立顧客'}</button>
+                        className="flex-1 py-2.5 rounded-full text-sm font-medium disabled:opacity-50"
+                        style={{ background:'var(--t-accent)', color:'var(--t-accent-fg)' }}>{saving?'建立中…':'建立顧客'}</button>
                       <button onClick={() => setCreatingCust(false)}
                         className="px-4 py-2.5 rounded-xl text-sm" style={{ background:'var(--t-elevated)', color:'var(--t-text-3)' }}>取消</button>
                     </div>
@@ -682,7 +701,7 @@ export default function AppointmentsClient({
                         {customers.slice(0,5).map(c => (
                           <button key={c.id} onClick={() => setForm(f=>({...f,customerId:c.id}))}
                             className="w-full text-left px-4 py-2.5 border-b last:border-0 transition-colors"
-                            style={{ borderColor:'var(--t-border)' }}
+                            style={{ borderColor:'var(--color-line-soft)' }}
                             onMouseEnter={e=>(e.currentTarget as HTMLElement).style.background='var(--t-elevated)'}
                             onMouseLeave={e=>(e.currentTarget as HTMLElement).style.background=''}>
                             <p className="text-sm font-medium" style={{ color:'var(--t-text)' }}>{c.name}</p>
@@ -734,7 +753,7 @@ export default function AppointmentsClient({
                     <button key={s} onClick={() => setForm(f=>({...f,time:s}))}
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all"
                       style={form.time===s
-                        ? { background:'var(--t-accent)', color:'#fff' }
+                        ? { background:'var(--t-accent)', color:'var(--t-accent-fg)' }
                         : { background:'var(--t-elevated)', color:'var(--t-text-3)', border:'1.5px solid var(--t-border)' }}>
                       {s}
                     </button>
@@ -756,7 +775,7 @@ export default function AppointmentsClient({
             <div className="px-6 pb-6">
               <button onClick={handleAdd} disabled={saving||!form.customerId||!form.serviceId||!form.date||!form.time}
                 className="w-full py-3 rounded-xl text-sm font-bold disabled:opacity-50"
-                style={{ background:'var(--t-accent)', color:'#fff' }}>
+                style={{ background:'var(--t-accent)', color:'var(--t-accent-fg)' }}>
                 {saving?'建立中…':'建立預約'}
               </button>
             </div>
@@ -767,7 +786,7 @@ export default function AppointmentsClient({
       {/* ══ BLOCK MODAL ══ */}
       {addingBlock && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-          style={{ background:'rgba(15,30,56,0.45)', backdropFilter:'blur(4px)' }}
+          style={{ background:'rgba(28,28,26,0.4)' }}
           onClick={() => setAddingBlock(false)}>
           <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl overflow-y-auto max-h-[90vh]"
             style={{ background:'var(--t-surface)', boxShadow:'var(--t-shadow-md)' }}
@@ -814,7 +833,7 @@ export default function AppointmentsClient({
             <div className="px-6 pb-6">
               <button onClick={handleCreateBlock} disabled={creatingBlock||!blockForm.date||!blockForm.start||!blockForm.end}
                 className="w-full py-3 rounded-xl text-sm font-bold disabled:opacity-50"
-                style={{ background:'var(--t-accent)', color:'#fff' }}>
+                style={{ background:'var(--t-accent)', color:'var(--t-accent-fg)' }}>
                 {creatingBlock?'建立中…':'建立休假'}
               </button>
             </div>
@@ -825,7 +844,7 @@ export default function AppointmentsClient({
       {/* ══ PAY MODAL ══ */}
       {paying && selected && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
-          style={{ background:'rgba(15,30,56,0.45)', backdropFilter:'blur(4px)' }}
+          style={{ background:'rgba(28,28,26,0.4)' }}
           onClick={() => setPaying(false)}>
           <div className="w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl"
             style={{ background:'var(--t-surface)', boxShadow:'var(--t-shadow-md)' }}
@@ -858,9 +877,9 @@ export default function AppointmentsClient({
                 <div className="grid grid-cols-2 gap-2">
                   {PAY_METHODS.map(m => (
                     <button key={m} onClick={() => setPayForm(f=>({...f,payMethod:m}))}
-                      className="py-2.5 rounded-xl text-sm font-semibold transition-all"
+                      className="py-2.5 rounded-full text-sm font-medium transition-all"
                       style={payForm.payMethod===m
-                        ? { background:'var(--t-accent)', color:'#fff' }
+                        ? { background:'var(--t-accent)', color:'var(--t-accent-fg)' }
                         : { background:'var(--t-elevated)', color:'var(--t-text-3)', border:'1.5px solid var(--t-border)' }}>
                       {m}
                     </button>
@@ -871,7 +890,7 @@ export default function AppointmentsClient({
             <div className="px-6 pb-6">
               <button onClick={handlePay} disabled={saving||!payForm.total}
                 className="w-full py-3 rounded-xl text-sm font-bold disabled:opacity-50"
-                style={{ background:'#059669', color:'#fff' }}>
+                style={{ background:'var(--t-success)', color:'#fff' }}>
                 {saving?'處理中…':'確認收款'}
               </button>
             </div>

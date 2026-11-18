@@ -1,15 +1,25 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { X } from 'lucide-react'
+import { SettingsCard } from './SettingsCard'
+import { btnPrimary, btnOutline, inputCls } from '@/components/ui/kit'
 
 type BusinessHours = { closedWeekdays: number[]; closedDates: string[]; openDates: string[] }
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六']
 
-export default function BusinessHoursCard() {
+function fmtDate(iso: string) {
+  const [y, m, d] = iso.split('-').map(Number)
+  const wd = WEEKDAYS[new Date(y, m - 1, d).getDay()]
+  return `${m}/${d}（${wd}）`
+}
+
+export default function BusinessHoursCard({ className = '' }: { className?: string }) {
   const [hours, setHours] = useState<BusinessHours>({ closedWeekdays: [0], closedDates: [], openDates: [] })
   const [loaded, setLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState('')
+  const [dirty, setDirty] = useState(false)
   const [newClosed, setNewClosed] = useState('')
   const [newOpen, setNewOpen] = useState('')
 
@@ -21,21 +31,22 @@ export default function BusinessHoursCard() {
       .finally(() => setLoaded(true))
   }, [])
 
+  function update(fn: (h: BusinessHours) => BusinessHours) { setHours(fn); setDirty(true) }
+
   function toggleWeekday(d: number) {
-    setHours(h => ({
+    update(h => ({
       ...h,
       closedWeekdays: h.closedWeekdays.includes(d)
         ? h.closedWeekdays.filter(x => x !== d)
         : [...h.closedWeekdays, d].sort(),
     }))
   }
-
   function addDate(kind: 'closedDates' | 'openDates', value: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return
-    setHours(h => (h[kind].includes(value) ? h : { ...h, [kind]: [...h[kind], value].sort() }))
+    update(h => (h[kind].includes(value) ? h : { ...h, [kind]: [...h[kind], value].sort() }))
   }
   function removeDate(kind: 'closedDates' | 'openDates', value: string) {
-    setHours(h => ({ ...h, [kind]: h[kind].filter(d => d !== value) }))
+    update(h => ({ ...h, [kind]: h[kind].filter(d => d !== value) }))
   }
 
   async function save() {
@@ -46,89 +57,76 @@ export default function BusinessHoursCard() {
       body: JSON.stringify(hours),
     })
     setSaving(false)
-    if (res.ok) setSavedAt(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }))
+    if (res.ok) {
+      setDirty(false)
+      setSavedAt(new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' }))
+    }
   }
 
   return (
-    <div className="bg-[var(--t-surface)] border border-[var(--t-border)] mt-8">
-      <div className="px-8 py-5 border-b border-[var(--t-border)]">
-        <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-2)] uppercase">營業與公休設定</p>
-      </div>
-
-      <div className="px-8 py-6 space-y-8">
-        {/* 每週固定公休 */}
-        <div>
-          <p className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-3">每週固定公休</p>
-          <div className="flex flex-wrap gap-2">
-            {WEEKDAYS.map((label, d) => {
-              const on = hours.closedWeekdays.includes(d)
-              return (
-                <button key={d} onClick={() => toggleWeekday(d)} disabled={!loaded}
-                  className={`w-9 h-9 text-xs tracking-wide border transition-colors ${
-                    on ? 'border-[var(--t-accent)] bg-[var(--t-accent)] text-[var(--t-accent-fg)]'
-                       : 'border-[var(--t-border-s)] text-[var(--t-text-3)] hover:border-[var(--t-accent)]'
-                  }`}>
-                  {label}
-                </button>
-              )
-            })}
-          </div>
-          <p className="text-[10px] text-[var(--t-text-4)] mt-2 tracking-wide">選取的星期將自動公休、不開放預約。</p>
-        </div>
-
-        {/* 臨時公休日 */}
-        <DateList
-          title="臨時公休日（例如國定假日、店休）"
-          items={hours.closedDates}
-          value={newClosed}
-          onValue={setNewClosed}
-          onAdd={() => { addDate('closedDates', newClosed); setNewClosed('') }}
-          onRemove={v => removeDate('closedDates', v)}
-        />
-
-        {/* 特殊營業日 */}
-        <DateList
-          title="特殊營業日（覆蓋固定公休，該日照常營業）"
-          items={hours.openDates}
-          value={newOpen}
-          onValue={setNewOpen}
-          onAdd={() => { addDate('openDates', newOpen); setNewOpen('') }}
-          onRemove={v => removeDate('openDates', v)}
-        />
-
-        <div className="flex items-center gap-4 pt-2">
-          <button onClick={save} disabled={saving || !loaded}
-            className="border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] disabled:opacity-40 px-6 py-2 text-[10px] tracking-[0.25em] uppercase transition-all">
-            {saving ? '儲存中' : '儲存設定'}
-          </button>
-          {savedAt && <span className="text-[10px] text-[var(--t-text-4)] tracking-wide">已於 {savedAt} 儲存</span>}
+    <SettingsCard title="營業日" hint="公休日客人不能預約" className={className}
+      footer={<>
+        <button onClick={save} disabled={saving || !loaded || !dirty} className={btnPrimary}>{saving ? '儲存中' : '儲存'}</button>
+        <span className="text-xs text-ink-muted">{dirty ? '有尚未儲存的變更' : savedAt ? `已於 ${savedAt} 儲存` : ''}</span>
+      </>}>
+      <div className="flex flex-col gap-2">
+        <span className="text-[13px] font-bold text-ink">每週固定公休</span>
+        <div className="grid grid-cols-7 gap-1.5">
+          {WEEKDAYS.map((label, d) => {
+            const on = hours.closedWeekdays.includes(d)
+            return (
+              <button key={d} onClick={() => toggleWeekday(d)} disabled={!loaded} aria-pressed={on}
+                aria-label={`週${label}${on ? '，公休' : '，營業'}`}
+                className={`flex h-14 flex-col items-center justify-center rounded-lg text-sm transition-colors ${
+                  on ? 'bg-ink text-paper' : 'border border-border-input text-ink hover:bg-surface-muted'
+                }`}>
+                {label}
+                <span className={`text-[11px] ${on ? 'text-sage-soft' : 'text-ink-muted'}`}>{on ? '公休' : '營業'}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
-    </div>
+
+      <DateList title="臨時公休日" hint="國定假日、進修、店休" items={hours.closedDates}
+        value={newClosed} onValue={setNewClosed}
+        onAdd={() => { addDate('closedDates', newClosed); setNewClosed('') }}
+        onRemove={v => removeDate('closedDates', v)} />
+
+      <DateList title="特殊營業日" hint="原本公休、這天照常營業" items={hours.openDates}
+        value={newOpen} onValue={setNewOpen}
+        onAdd={() => { addDate('openDates', newOpen); setNewOpen('') }}
+        onRemove={v => removeDate('openDates', v)} />
+    </SettingsCard>
   )
 }
 
-function DateList({ title, items, value, onValue, onAdd, onRemove }: {
-  title: string; items: string[]; value: string
+function DateList({ title, hint, items, value, onValue, onAdd, onRemove }: {
+  title: string; hint: string; items: string[]; value: string
   onValue: (v: string) => void; onAdd: () => void; onRemove: (v: string) => void
 }) {
   return (
-    <div>
-      <p className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-3">{title}</p>
-      <div className="flex flex-wrap gap-2 mb-3">
-        {items.length === 0 && <span className="text-[10px] text-[var(--t-text-4)] tracking-wide">尚未設定</span>}
-        {items.map(d => (
-          <span key={d} className="inline-flex items-center gap-2 border border-[var(--t-accent-bg)] text-[var(--t-accent)] px-2.5 py-1 text-[11px] tracking-wide">
-            {d}
-            <button onClick={() => onRemove(d)} className="text-[var(--t-text-4)] hover:text-[#A05050] leading-none">×</button>
-          </span>
-        ))}
-      </div>
-      <div className="flex items-center gap-3">
-        <input type="date" value={value} onChange={e => onValue(e.target.value)}
-          className="bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-1.5 text-sm text-[var(--t-text)] transition-colors" />
-        <button onClick={onAdd} disabled={!value}
-          className="text-[10px] tracking-[0.2em] uppercase text-[var(--t-text-3)] hover:text-[var(--t-accent)] disabled:opacity-40 transition-colors">＋ 新增</button>
+    <div className="flex flex-col gap-2">
+      <span className="flex items-baseline gap-2">
+        <span className="text-[13px] font-bold text-ink">{title}</span>
+        <span className="text-xs text-ink-muted">{hint}</span>
+      </span>
+      {items.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {items.map(d => (
+            <span key={d} className="inline-flex h-9 items-center gap-1 rounded-full bg-surface-muted pl-3.5 pr-1 text-[13px] text-ink">
+              {fmtDate(d)}
+              <button onClick={() => onRemove(d)} aria-label={`移除 ${d}`}
+                className="flex size-8 items-center justify-center rounded-full text-ink-muted hover:bg-line-soft hover:text-ink">
+                <X size={14} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-2">
+        <input type="date" value={value} onChange={e => onValue(e.target.value)} aria-label={`新增${title}`} className={`${inputCls} flex-1`} />
+        <button onClick={onAdd} disabled={!value} className={btnOutline}>加入</button>
       </div>
     </div>
   )

@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
-import { Plus, Clock } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import { Plus } from 'lucide-react'
+import { serviceDescription } from '@/lib/booking-content'
+import { PageHeader, FilterChip, Modal, FormField, EmptyState, btnPrimary, btnText, inputCls } from '@/components/ui/kit'
 
 type Service = { id: string; name: string; price: number; durationMin: number; category: string }
 const CATEGORIES = ['身體按摩', '臉部護理', '特別療癒套組'] as const
@@ -54,132 +56,95 @@ export default function ServicesClient({ initialServices }: { initialServices: S
 
   const showModal = adding || !!editing
 
-  return (
-    <div className="flex flex-col flex-1 overflow-hidden">
-      <header className="h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex items-center justify-between px-8 shrink-0">
-        <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-3)] uppercase">服務項目</p>
-        <button onClick={openAdd}
-          className="flex items-center gap-2 border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">
-          <Plus size={11} />
-          新增服務
-        </button>
-      </header>
+  // 分類以固定清單為主，再補上資料裡出現、但清單沒有的分類，避免舊資料被藏起來
+  const allCats = [...new Set<string>([...CATEGORIES, ...services.map(s => s.category)])]
+  const shownCats = filterCat === '全部' ? allCats : [filterCat]
 
-      <main className="flex-1 bg-[var(--t-bg)] p-4 lg:p-8 overflow-auto">
-        {/* Category tabs */}
-        <div className="flex items-center gap-6 mb-8 border-b border-[var(--t-border)] pb-0">
+  return (
+    <div className="flex flex-1 flex-col overflow-hidden" style={{ background: 'var(--t-bg)' }}>
+      <PageHeader title="服務項目" meta={`共 ${services.length} 項`}>
+        <button onClick={openAdd} className={btnPrimary}><Plus size={16} strokeWidth={1.8} />新增服務</button>
+      </PageHeader>
+
+      <div className="shrink-0 px-4 pt-2 lg:px-5">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-wrap lg:px-0">
           {(['全部', ...CATEGORIES] as const).map(cat => (
-            <button key={cat} onClick={() => setFilterCat(cat)}
-              className={`pb-3 text-[10px] tracking-[0.25em] border-b-[1.5px] -mb-px transition-colors ${
-                filterCat === cat
-                  ? 'border-[var(--t-accent)] text-[var(--t-accent)]'
-                  : 'border-transparent text-[var(--t-text-3)] hover:text-[var(--t-text-2)]'
-              }`}>
-              {cat}
-            </button>
+            <FilterChip key={cat} active={filterCat === cat} onClick={() => setFilterCat(cat)}>
+              {cat}{cat !== '全部' && `　${services.filter(s => s.category === cat).length}`}
+            </FilterChip>
           ))}
         </div>
+      </div>
 
+      <main className="flex-1 overflow-auto px-4 pb-4 pt-3 lg:px-5 lg:pb-5">
         {services.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-64 text-center">
-            <p className="text-xs text-[var(--t-text-3)] tracking-widest mb-2">尚無服務項目</p>
-            <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">點擊「新增服務」開始建立</p>
-          </div>
+          <div className="rounded-2xl bg-surface"><EmptyState title="還沒有服務項目" hint="按「新增服務」建立第一項。" /></div>
         ) : (
-          <div className="space-y-8">
-            {(filterCat === '全部' ? CATEGORIES : [filterCat]).map(cat => { const items = grouped[cat] ?? []; return (
-              <div key={cat}>
-                <div className="flex items-center gap-4 mb-4">
-                  <p className="text-[10px] tracking-[0.3em] text-[var(--t-accent)]">{cat}</p>
-                  <div className="flex-1 h-px bg-[var(--t-border)]" />
-                  <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">{items.length} 項</p>
-                </div>
-                <div className="bg-[var(--t-surface)] border border-[var(--t-border)] overflow-x-auto">
-                  <table className="w-full min-w-[480px] table-fixed">
-                    <colgroup>
-                      <col className="w-auto" />
-                      <col style={{width:'120px'}} />
-                      <col style={{width:'140px'}} />
-                      <col style={{width:'96px'}} />
-                    </colgroup>
-                    <thead>
-                      <tr className="border-b border-[var(--t-border)]">
-                        {['服務名稱', '時長', '定價', ''].map((h, i) => (
-                          <th key={i} className={`text-[10px] font-normal text-[var(--t-text-4)] tracking-[0.25em] uppercase py-3 ${i === 0 ? 'text-left px-7' : 'text-right px-7'}`}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.length === 0 ? (
-                        <tr><td colSpan={4} className="px-7 py-6 text-[10px] text-[var(--t-text-4)] tracking-wide">尚無項目</td></tr>
-                      ) : items.map((s) => (
-                        <tr key={s.id} className="border-b border-[var(--t-border)] last:border-0 hover:bg-[var(--t-bg)] transition-colors group">
-                          <td className="px-7 py-4 text-sm font-light text-[var(--t-text)] tracking-wide">{s.name}</td>
-                          <td className="px-7 py-4 text-right">
-                            <span className="flex items-center justify-end gap-1.5 text-xs text-[var(--t-text-3)]">
-                              <Clock size={11} strokeWidth={1.5} />
-                              {s.durationMin} 分
-                            </span>
-                          </td>
-                          <td className="px-7 py-4 text-right text-sm font-light text-[var(--t-text)] tabular-nums">
-                            NT$ {s.price.toLocaleString()}
-                          </td>
-                          <td className="px-7 py-4 text-right">
-                            <span className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end gap-4">
-                              <button onClick={() => openEdit(s)} className="text-[10px] tracking-wide text-[var(--t-text-3)] hover:text-[var(--t-accent)] transition-colors">編輯</button>
-                              <button onClick={() => handleDelete(s.id, s.name)} className="text-[10px] tracking-wide text-[var(--t-text-3)] hover:text-[#A05050] transition-colors">刪除</button>
-                            </span>
-                          </td>
-                        </tr>
+          <div className="flex flex-col gap-5">
+            {shownCats.map(cat => {
+              const items = grouped[cat] ?? []
+              if (items.length === 0 && filterCat === '全部') return null
+              return (
+                <section key={cat} className="flex flex-col gap-3">
+                  <div className="flex items-baseline gap-2.5 px-1">
+                    <h2 className="text-[17px] text-ink">{cat}</h2>
+                    <span className="text-xs text-ink-muted">{items.length} 項</span>
+                  </div>
+                  {items.length === 0 ? (
+                    <p className="rounded-2xl bg-surface px-5 py-6 text-[13px] text-ink-muted">這個分類還沒有項目。</p>
+                  ) : (
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {items.map(s => (
+                        <div key={s.id} className="flex flex-col gap-3 rounded-2xl bg-surface px-5 pb-2 pt-[18px]">
+                          <span className="font-heading text-[17px] font-semibold text-ink">{s.name}</span>
+                          <span className="-mt-1.5 text-[13px] leading-relaxed text-ink-soft">{serviceDescription(s.name) ?? '尚無說明（說明文字在 lib/booking-content.ts）'}</span>
+                          <div className="flex items-baseline gap-2.5">
+                            <span className="num text-2xl font-semibold leading-none text-ink">NT$ {s.price.toLocaleString()}</span>
+                            <span className="text-[13px] text-ink-muted">{s.durationMin} 分鐘</span>
+                          </div>
+                          <div className="flex justify-end gap-3 border-t border-line-soft">
+                            <button onClick={() => openEdit(s)} className={btnText}>編輯</button>
+                            <button onClick={() => handleDelete(s.id, s.name)} className={`${btnText} hover:text-visit-red`}>刪除</button>
+                          </div>
+                        </div>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )})}
+                    </div>
+                  )}
+                </section>
+              )
+            })}
           </div>
         )}
       </main>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[var(--t-surface)] border border-[var(--t-border)] w-full max-w-sm p-8">
-            <div className="flex items-center justify-between mb-8">
-              <p className="text-[10px] tracking-[0.3em] text-[var(--t-text-2)] uppercase">{editing ? '編輯服務' : '新增服務'}</p>
-              <button onClick={() => { setAdding(false); setEditing(null) }} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none transition-colors">×</button>
-            </div>
-            <div className="space-y-6">
-              <div>
-                <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">服務名稱</label>
-                <input type="text" placeholder="例：深層修復" value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                  className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors" />
-              </div>
-              <div>
-                <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">類別</label>
-                <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
-                  className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] transition-colors appearance-none cursor-pointer">
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </div>
-              {([
-                { label: '時長（分鐘）', key: 'durationMin' as const, placeholder: '60' },
-                { label: '定價（NT$）',  key: 'price'       as const, placeholder: '1800' },
-              ]).map(({ label, key, placeholder }) => (
-                <div key={key}>
-                  <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">{label}</label>
-                  <input type="number" placeholder={placeholder} value={form[key]}
-                    onChange={e => setForm({ ...form, [key]: e.target.value })}
-                    className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors" />
-                </div>
-              ))}
-            </div>
-            <button onClick={handleSave} disabled={saving}
-              className="w-full mt-8 border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] disabled:opacity-40 py-2.5 text-[10px] tracking-[0.25em] uppercase transition-all duration-200">
+        <Modal title={editing ? '編輯服務' : '新增服務'} onClose={() => { setAdding(false); setEditing(null) }}
+          footer={
+            <button onClick={handleSave} disabled={saving} className={`${btnPrimary} h-[50px] flex-1`}>
               {saving ? '儲存中' : editing ? '儲存變更' : '建立服務'}
             </button>
+          }>
+          <FormField label="服務名稱" htmlFor="svc-name">
+            <input id="svc-name" type="text" placeholder="例：深層保濕護理" value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value })} className={inputCls} />
+          </FormField>
+          <FormField label="類別" htmlFor="svc-cat">
+            <select id="svc-cat" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
+              className={`${inputCls} cursor-pointer`}>
+              {allCats.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="時長（分鐘）" htmlFor="svc-dur">
+              <input id="svc-dur" type="number" inputMode="numeric" placeholder="60" value={form.durationMin}
+                onChange={e => setForm({ ...form, durationMin: e.target.value })} className={inputCls} />
+            </FormField>
+            <FormField label="定價（NT$）" htmlFor="svc-price">
+              <input id="svc-price" type="number" inputMode="numeric" placeholder="1800" value={form.price}
+                onChange={e => setForm({ ...form, price: e.target.value })} className={inputCls} />
+            </FormField>
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   )

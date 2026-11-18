@@ -1,43 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import Image from 'next/image'
 import Quiz from './Quiz'
-import type { CSSProperties, ReactNode } from 'react'
-import {
-  Calendar,
-  Check,
-  CheckCircle2,
-  ChevronLeft,
-  Clock,
-  Loader2,
-  Mail,
-  MessageSquareText,
-  Phone,
-  Sparkles,
-  User,
-} from 'lucide-react'
-
-const C = {
-  bg: '#F8F1E6',
-  surface: '#FFFDFC',
-  elevated: '#FAF4EA',
-  border: '#E4D3BE',
-  borderStrong: '#DCC7AA',
-  accent: '#B99868',
-  accentH: '#9B744A',
-  accentBg: 'rgba(185,152,104,0.14)',
-  dark: '#33281E',
-  dark2: '#3B2D22',
-  text: '#33281E',
-  text2: '#5E4C3D',
-  text3: '#76685B',
-  text4: '#9A8A7B',
-  warning: '#B8842B',
-  danger: '#B85C50',
-  dangerBg: 'rgba(184,92,80,0.10)',
-  success: '#6F8F74',
-  shadow: '0 18px 50px rgba(51,40,30,0.12)',
-}
+import { serviceDescription, BOOKING_NOTICE } from '@/lib/booking-content'
+import { Check, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 
 type Service = { id: string; name: string; price: number; durationMin: number; category: string }
 type ServiceMap = Record<string, Service[]>
@@ -54,7 +21,6 @@ type FormData = {
 }
 
 const EMPTY: FormData = { category: '', serviceId: '', date: '', time: '', name: '', phone: '', email: '', note: '' }
-const STEPS = ['服務', '日期時段', '聯絡資料', '確認']
 
 function toInputDate(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -95,6 +61,30 @@ function formatDate(d: string): string {
   return `${y}年${m}月${day}日（週${wd}）`
 }
 
+/** 11 月 18 日　週三 */
+function longDate(d: string): string {
+  if (!d) return ''
+  const [y, m, day] = d.split('-').map(Number)
+  const wd = WEEKDAY_LABELS[new Date(y, m - 1, day).getDay()]
+  return `${m} 月 ${day} 日　週${wd}`
+}
+
+/** 11/18（三） */
+function shortDate(d: string): string {
+  if (!d) return ''
+  const [y, m, day] = d.split('-').map(Number)
+  const wd = WEEKDAY_LABELS[new Date(y, m - 1, day).getDay()]
+  return `${m}/${day}（${wd}）`
+}
+
+/** 14:00 + 60 分 → 15:00 */
+function addMinutes(time: string, minutes: number): string {
+  if (!time) return ''
+  const [h, m] = time.split(':').map(Number)
+  const total = h * 60 + m + minutes
+  return `${String(Math.floor(total / 60) % 24).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
 function compactDate(d: string): { day: string; weekday: string; month: string } {
   const [y, m, day] = d.split('-').map(Number)
   const date = new Date(y, m - 1, day)
@@ -132,14 +122,13 @@ export default function BookForm({ businessName }: { businessName: string }) {
   const [hours, setHours] = useState<BusinessHours>(DEFAULT_HOURS)
   const [returning, setReturning] = useState(false)
   const [mode, setMode] = useState<'booking' | 'quiz'>('booking')
+  const [agreed, setAgreed] = useState(false)
   const slotCacheRef = useRef(new Map<string, string[]>())
   const slotRequestRef = useRef(0)
 
   useEffect(() => {
     fetch('/api/book/services').then(r => r.json()).then((data: ServiceMap) => {
       setServices(data)
-      const firstCategory = Object.keys(data)[0]
-      if (firstCategory) setForm(prev => prev.category ? prev : { ...prev, category: firstCategory })
     }).catch(() => {})
 
     // 公休日設定：改由後台設定驅動，不再寫死週日
@@ -214,12 +203,12 @@ export default function BookForm({ businessName }: { businessName: string }) {
   const flatServices = useMemo(() => Object.values(services).flat(), [services])
   const selectedService = flatServices.find(s => s.id === form.serviceId)
   const categories = Object.keys(services)
-  const visibleServices = form.category ? services[form.category] ?? [] : []
+  // category 為空字串代表「全部」
+  const visibleServices = form.category ? services[form.category] ?? [] : flatServices
   const dates = useMemo(() => quickDates(hours), [hours])
   const step0Valid = !!form.serviceId
   const step1Valid = !!form.date && !!form.time && !isClosed(form.date, hours)
   const step2Valid = form.name.trim().length >= 2 && /^09\d{8}$/.test(form.phone.replace(/[-\s]/g, ''))
-  const isDisabled = (step === 0 && !step0Valid) || (step === 1 && !step1Valid) || (step === 2 && !step2Valid)
 
   function setField<K extends keyof FormData>(k: K, v: FormData[K]) {
     setForm(prev => ({ ...prev, [k]: v }))
@@ -230,10 +219,17 @@ export default function BookForm({ businessName }: { businessName: string }) {
     setSlots([])
   }
 
+  // 選好服務就直接進「選時段」，並預選最近的營業日，少點一次
   function selectService(id: string) {
-    setField('serviceId', id)
-    setField('time', '')
-    if (form.date) loadSlots(form.date, id)
+    const date = form.date || dates[0] || ''
+    setForm(prev => ({ ...prev, serviceId: id, date, time: '' }))
+    if (date) loadSlots(date, id)
+    setStep(1)
+  }
+
+  // 選好時段後：LINE 已帶入姓名電話就略過填資料，直接到確認
+  function afterSlot() {
+    setStep(step2Valid ? 3 : 2)
   }
 
   function selectDate(d: string) {
@@ -243,14 +239,16 @@ export default function BookForm({ businessName }: { businessName: string }) {
   }
 
   function handleQuizPick(category: string, serviceId: string) {
-    setForm(prev => ({ ...prev, category, serviceId, time: '' }))
+    const date = form.date || dates[0] || ''
+    setForm(prev => ({ ...prev, category, serviceId, date, time: '' }))
     setSlots([])
+    if (date) loadSlots(date, serviceId)
     setMode('booking')
-    setStep(0)
+    setStep(1)
   }
 
   async function submit() {
-    if (!step2Valid || !step0Valid || !step1Valid) return
+    if (!step2Valid || !step0Valid || !step1Valid || !agreed) return
     setSubmitting(true)
     setError('')
     try {
@@ -272,733 +270,376 @@ export default function BookForm({ businessName }: { businessName: string }) {
     }
   }
 
+  // ── 畫面 ──────────────────────────────────────────────────────────────────
+
   if (done) {
     return (
-      <div style={pageCenter}>
-        <div style={successCard} className="bk-success-card">
-          <div style={successMark} className="bk-success-mark">
-            <CheckCircle2 size={42} color="white" />
+      <Shell>
+        <div className="bk-success-card flex flex-1 flex-col items-center justify-center gap-6 py-10 text-center">
+          <span className="flex size-16 items-center justify-center rounded-full bg-ink text-paper">
+            <Check size={30} strokeWidth={1.6} />
+          </span>
+          <div className="flex flex-col gap-2">
+            <h1 className="text-[26px] font-medium text-ink">預約成功</h1>
+            <p className="text-sm text-ink-muted">我們已收到你的預約，到時候見。</p>
           </div>
-          <p style={{ color: C.accentH, fontSize: 12, fontWeight: 700, letterSpacing: '0.26em', margin: '0 0 10px' }}>
-            BOOKING CONFIRMED
-          </p>
-          <h1 style={{ color: C.text, fontSize: 28, fontWeight: 700, margin: 0 }}>預約成功</h1>
-          <p style={{ color: C.text3, fontSize: 14, lineHeight: 1.7, margin: '10px 0 24px' }}>
-            我們已收到您的預約，請保留以下資訊。
-          </p>
-          <div style={summaryBox}>
-            {[['服務', done.service], ['日期', formatDate(done.date)], ['時間', done.time], ['預約編號', done.code]].map(([label, value]) => (
-              <SummaryRow key={label} label={label} value={value} />
-            ))}
+          <div className="flex w-full flex-col gap-4 rounded-2xl bg-ink px-[22px] py-6 text-left text-paper">
+            <div className="flex flex-col gap-1">
+              <span className="text-[13px] text-sage-soft">{longDate(done.date)}</span>
+              <span className="num text-[56px] font-medium leading-none">{done.time}</span>
+            </div>
+            <div className="h-px bg-[#4A4A45]" />
+            <div className="flex items-end justify-between gap-3">
+              <span className="font-heading text-[19px] font-semibold tracking-wider">{done.service}</span>
+              <span className="text-[13px] text-sage-soft">預約編號　<span className="num text-lg text-paper">{done.code}</span></span>
+            </div>
           </div>
-          {form.email && <p style={{ color: C.text3, fontSize: 13, textAlign: 'center', margin: '18px 0 0' }}>確認信已寄送至 {form.email}</p>}
+          {form.email && <p className="text-[13px] text-ink-muted">確認信已寄到 {form.email}</p>}
         </div>
-      </div>
+      </Shell>
     )
   }
 
+  if (mode === 'quiz') {
+    return (
+      <Shell>
+        <BackHeader title="幫你推薦" onBack={() => setMode('booking')} />
+        <div className="bk-step-content rounded-2xl bg-surface p-5">
+          <Quiz services={services} onPick={handleQuizPick} />
+        </div>
+      </Shell>
+    )
+  }
+
+  const greetingName = form.name.trim()
+  const slotGroups: [string, string[]][] = ([
+    ['上午', slots.filter(t => t < '12:00')],
+    ['下午', slots.filter(t => t >= '12:00' && t < '17:00')],
+    ['傍晚', slots.filter(t => t >= '17:00')],
+  ] as [string, string[]][]).filter(([, list]) => list.length > 0)
+
   return (
-    <div style={pageShell}>
-      <main style={layout}>
-        <aside style={brandPanel}>
-          <div>
-            <div style={brandIcon}><Sparkles size={18} /></div>
-            <p style={eyebrow}>ONLINE BOOKING</p>
-            <h1 style={brandTitle}>{businessName}</h1>
-            <p style={brandText}>選擇服務、日期與時段，免登入即可完成預約。</p>
+    <Shell>
+      {/* ── 1 選服務 ── */}
+      {step === 0 && (
+        <div key="s0" className="bk-step-content flex flex-col gap-3.5">
+          <div className="flex items-center gap-1">
+            <Image src="/logo.png" alt="" width={52} height={52} priority />
+            <span className="font-heading text-base font-semibold tracking-[0.2em] text-ink">{businessName}</span>
           </div>
 
-          <div style={brandInfoGrid}>
-            <InfoTile label="流程" value="4 步完成" />
-            <InfoTile label="預約" value="即時確認" />
-            <InfoTile label="通知" value="LINE / Email" />
-            <InfoTile label="營業" value={closedLabel(hours)} />
-          </div>
-        </aside>
-
-        <section style={card}>
-          <div style={cardHeader}>
-            <div>
-              <p style={eyebrow}>RESERVATION</p>
-              <h2 style={{ color: C.text, fontSize: 24, fontWeight: 700, margin: '4px 0 0' }}>線上預約</h2>
-            </div>
-            <div style={priceHint}>{selectedService ? `NT$ ${selectedService.price.toLocaleString()}` : '選擇服務'}</div>
+          <div className="flex flex-col gap-1.5 px-1">
+            <h1 className="text-2xl font-medium leading-[1.4] text-ink">
+              {greetingName ? `${greetingName}，今天想做什麼？` : '今天想做什麼？'}
+            </h1>
+            <Progress current={1} />
           </div>
 
-          <div style={modeTabs}>
-            <button onClick={() => setMode('booking')} style={modeTab(mode === 'booking')}>預約</button>
-            <button onClick={() => setMode('quiz')} style={modeTab(mode === 'quiz')}>測驗推薦</button>
-          </div>
-
-          {mode === 'quiz' ? (
-            <div style={content}>
-              <Quiz services={services} onPick={handleQuizPick} />
-            </div>
+          {categories.length === 0 ? (
+            <LoadingState text="載入服務中" />
           ) : (
-          <>
-          <Stepper step={step} />
+            <>
+              <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
+                <Chip active={form.category === ''} onClick={() => selectCategory('')}>全部</Chip>
+                {categories.map(cat => (
+                  <Chip key={cat} active={form.category === cat} onClick={() => selectCategory(cat)}>{cat}</Chip>
+                ))}
+              </div>
 
-          <div style={content}>
-            <div key={step} className="bk-step-content">
-            {step === 0 && (
-              <section>
-                <SectionTitle icon={<Sparkles size={17} />} title="選擇服務" subtitle="先選分類，再選擇想預約的項目。" />
+              <button onClick={() => setMode('quiz')}
+                className="flex min-h-[52px] items-center justify-between gap-3 rounded-xl border border-dashed border-ink-muted px-[18px] py-2.5 text-left text-ink transition-colors hover:bg-surface">
+                <span className="flex flex-col gap-0.5">
+                  <span className="text-sm font-medium">不確定選哪一個？</span>
+                  <span className="text-xs text-ink-muted">回答 3 題，幫你推薦適合的服務</span>
+                </span>
+                <ChevronRight size={18} strokeWidth={1.6} className="shrink-0" />
+              </button>
 
-                {categories.length === 0 ? (
-                  <LoadingState text="載入服務中" />
-                ) : (
-                  <>
-                    <div style={categoryTabs}>
-                      {categories.map(cat => (
-                        <button key={cat} onClick={() => selectCategory(cat)} style={tabStyle(form.category === cat)}>
-                          {cat}
-                        </button>
-                      ))}
+              <div className="flex flex-col gap-3">
+                {visibleServices.map(svc => (
+                  <div key={svc.id} className="flex items-center gap-3 rounded-2xl bg-surface p-4">
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <span className="font-heading text-[17px] font-semibold text-ink">{svc.name}</span>
+                      {serviceDescription(svc.name) && (
+                        <span className="text-[13px] leading-relaxed text-ink-soft">{serviceDescription(svc.name)}</span>
+                      )}
+                      <span className="text-xs text-ink-muted">{svc.category}・{svc.durationMin} 分鐘</span>
+                      <span className="num text-[21px] font-semibold leading-tight text-ink">NT$ {svc.price.toLocaleString()}</span>
                     </div>
-
-                    <div style={serviceList}>
-                      {visibleServices.map(svc => (
-                        <button key={svc.id} onClick={() => selectService(svc.id)} style={serviceStyle(form.serviceId === svc.id)} className="bk-service">
-                          <div>
-                            <p style={{ color: form.serviceId === svc.id ? C.accentH : C.text, fontSize: 15, fontWeight: 700, margin: 0 }}>{svc.name}</p>
-                            <p style={{ color: C.text4, fontSize: 13, margin: '6px 0 0' }}>{svc.durationMin} 分鐘</p>
-                          </div>
-                          <div style={{ color: C.accentH, fontSize: 15, fontWeight: 800 }}>NT$ {svc.price.toLocaleString()}</div>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </section>
-            )}
-
-            {step === 1 && (
-              <section>
-                <SectionTitle icon={<Calendar size={17} />} title="選擇日期與時段" subtitle="可先點選快捷日期，或使用日期選擇器。" />
-
-                <div style={selectedServiceBar}>
-                  <div>
-                    <p style={{ color: C.text4, fontSize: 12, margin: 0 }}>已選服務</p>
-                    <p style={{ color: C.text, fontSize: 14, fontWeight: 700, margin: '3px 0 0' }}>{selectedService?.name}</p>
+                    <button onClick={() => selectService(svc.id)}
+                      aria-label={`選擇 ${svc.name}`}
+                      className={`flex h-11 shrink-0 items-center rounded-full px-[18px] text-[13px] font-medium transition-colors ${
+                        form.serviceId === svc.id
+                          ? 'bg-ink text-paper'
+                          : 'border border-ink text-ink hover:bg-surface-muted'
+                      }`}>
+                      {form.serviceId === svc.id ? '已選' : '選擇'}
+                    </button>
                   </div>
-                  <button onClick={() => setStep(0)} style={plainButton}>更換</button>
-                </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
-                <div style={dateStrip}>
-                  {dates.map(date => {
-                    const d = compactDate(date)
-                    const active = form.date === date
-                    return (
-                      <button key={date} onClick={() => selectDate(date)} style={dateChipStyle(active)} className="bk-chip">
-                        <span style={{ fontSize: 11, color: active ? '#FFFFFF' : C.text4 }}>{d.month}</span>
-                        <strong style={{ fontSize: 20, lineHeight: 1, color: active ? '#FFFFFF' : C.text }}>{d.day}</strong>
-                        <span style={{ fontSize: 11, color: active ? 'rgba(255,255,255,0.78)' : C.text3 }}>{d.weekday}</span>
-                      </button>
-                    )
-                  })}
-                </div>
+      {/* ── 2 選時段 ── */}
+      {step === 1 && (
+        <div key="s1" className="bk-step-content flex flex-1 flex-col gap-3">
+          <BackHeader title="選一個時段" progress={2} onBack={() => setStep(0)} />
 
-                <label style={datePickerLabel}>
-                  <span>其他日期</span>
-                  <input
-                    type="date"
-                    min={tomorrow()}
-                    max={maxDate()}
-                    value={form.date}
-                    onChange={e => selectDate(e.target.value)}
-                    style={dateInput}
-                  />
-                </label>
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-surface py-3 pl-[18px] pr-3">
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="truncate font-heading text-base font-semibold text-ink">{selectedService?.name}</span>
+              <span className="text-xs text-ink-muted">
+                {selectedService ? `${selectedService.durationMin} 分鐘・NT$ ${selectedService.price.toLocaleString()}` : ''}
+              </span>
+            </span>
+            <button onClick={() => setStep(0)}
+              className="flex h-11 shrink-0 items-center px-3.5 text-[13px] text-ink underline underline-offset-4">更換</button>
+          </div>
 
-                {form.date && isClosed(form.date, hours) && (
-                  <p style={warningText}>{closedLabel(hours)}，請選擇其他日期。</p>
-                )}
+          <div className="grid grid-cols-7 gap-1.5">
+            {dates.map(date => {
+              const d = compactDate(date)
+              const active = form.date === date
+              return (
+                <button key={date} onClick={() => selectDate(date)} aria-pressed={active}
+                  aria-label={formatDate(date)}
+                  className={`flex min-h-16 flex-col items-center justify-center gap-0.5 rounded-xl transition-colors ${
+                    active ? 'bg-ink text-paper' : 'bg-surface text-ink'
+                  }`}>
+                  <span className={`text-xs ${active ? '' : 'text-ink-muted'}`}>{d.weekday}</span>
+                  <span className="num text-[22px] font-semibold leading-none">{d.day}</span>
+                </button>
+              )
+            })}
+          </div>
 
-                {form.date && !isClosed(form.date, hours) && (
-                  <div style={{ marginTop: 22 }}>
-                    <SectionTitle icon={<Clock size={17} />} title="可預約時段" subtitle={formatDate(form.date)} dense />
-                    {slotsLoading ? (
-                      <LoadingState text="查詢時段中" compact />
-                    ) : slots.length === 0 ? (
-                      <EmptyState text="當天已無可預約時段，請選擇其他日期。" />
-                    ) : (
-                      <div style={slotGrid}>
-                        {slots.map(slot => (
-                          <button key={slot} onClick={() => setField('time', slot)} style={slotStyle(form.time === slot)} className="bk-chip">
+          <label className="flex min-h-11 items-center justify-end gap-2 pr-1 text-[13px] text-ink">
+            其他日期
+            <input type="date" min={tomorrow()} max={maxDate()} value={form.date}
+              onChange={e => selectDate(e.target.value)}
+              className="h-11 rounded-lg border border-border-input bg-surface px-3 text-[15px] text-ink outline-none focus:border-ink" />
+          </label>
+
+          <div className="flex flex-1 flex-col gap-2.5 rounded-2xl bg-surface p-4">
+            {!form.date ? (
+              <p className="py-8 text-center text-sm text-ink-muted">先選一個日期。</p>
+            ) : isClosed(form.date, hours) ? (
+              <p role="status" className="rounded-lg bg-warn-bg px-4 py-3 text-[13px] text-warn-ink">
+                {closedLabel(hours)}，請選擇其他日期。
+              </p>
+            ) : (
+              <>
+                <span className="text-[13px] font-bold text-ink">{longDate(form.date)}</span>
+                {slotsLoading ? (
+                  <LoadingState text="查詢時段中" compact />
+                ) : slots.length === 0 ? (
+                  <p className="rounded-lg bg-surface-muted px-4 py-4 text-center text-sm text-ink-muted">
+                    這天已經約滿了，換一天試試。
+                  </p>
+                ) : slotGroups.map(([label, list]) => (
+                  <div key={label} className="flex flex-col gap-2">
+                    <span className="text-xs text-ink-muted">{label}</span>
+                    <div className="grid grid-cols-4 gap-2">
+                      {list.map(slot => {
+                        const active = form.time === slot
+                        return (
+                          <button key={slot} onClick={() => setField('time', slot)} aria-pressed={active}
+                            className={`num h-[46px] rounded-lg text-[19px] font-semibold transition-colors ${
+                              active ? 'bg-ink text-paper' : 'border border-border-input text-ink hover:bg-surface-muted'
+                            }`}>
                             {slot}
                           </button>
-                        ))}
-                      </div>
-                    )}
+                        )
+                      })}
+                    </div>
                   </div>
-                )}
-              </section>
+                ))}
+              </>
             )}
+          </div>
 
-            {step === 2 && (
-              <section>
-                <SectionTitle icon={<User size={17} />} title="填寫聯絡資料" subtitle="手機號碼用於聯繫與確認預約。" />
-                {returning && (
-                  <p className="text-xs" style={{ color: C.success }}>✓ 已透過 LINE 帶入您上次的預約資料，可直接確認或修改。</p>
-                )}
-                <div style={fieldGrid}>
-                  <Field icon={<User size={16} />} label="姓名 *" value={form.name} onChange={v => setField('name', v)} placeholder="請輸入您的姓名" />
-                  <Field icon={<Phone size={16} />} label="手機號碼 *" value={form.phone} onChange={v => setField('phone', v)} placeholder="09xxxxxxxx" type="tel" />
-                  <Field icon={<Mail size={16} />} label="電子信箱（選填）" value={form.email} onChange={v => setField('email', v)} placeholder="預約確認信將寄至此信箱" type="email" />
-                  <div>
-                    <Label icon={<MessageSquareText size={16} />} label="備註（選填）" />
-                    <textarea
-                      value={form.note}
-                      onChange={e => setField('note', e.target.value)}
-                      placeholder="身體狀況、過敏史、特殊需求等"
-                      rows={4}
-                      style={{ ...inputStyle, resize: 'none', lineHeight: 1.6 }}
-                    />
-                  </div>
-                </div>
-              </section>
-            )}
+          <button onClick={afterSlot} disabled={!step1Valid}
+            className="sticky bottom-3 flex h-[54px] shrink-0 items-center justify-center rounded-full bg-ink text-base font-medium tracking-wider text-paper transition-colors hover:bg-ink-soft disabled:bg-border-input disabled:text-ink-muted">
+            {step1Valid ? `下一步　${shortDate(form.date)} ${form.time}` : '請選擇時段'}
+          </button>
+        </div>
+      )}
 
-            {step === 3 && (
-              <section>
-                <SectionTitle icon={<Check size={17} />} title="確認預約資料" subtitle="請確認資料無誤後送出。" />
-                <div style={summaryBox}>
-                  <SummaryRow label="服務" value={selectedService?.name ?? ''} />
-                  <SummaryRow label="費用" value={selectedService ? `NT$ ${selectedService.price.toLocaleString()}` : ''} />
-                  <SummaryRow label="時長" value={selectedService ? `${selectedService.durationMin} 分鐘` : ''} />
-                  <SummaryRow label="日期" value={formatDate(form.date)} />
-                  <SummaryRow label="時間" value={form.time} />
-                  <SummaryRow label="姓名" value={form.name} />
-                  <SummaryRow label="電話" value={form.phone} />
-                  <SummaryRow label="Email" value={form.email || '（未填寫）'} />
-                  {form.note && <SummaryRow label="備註" value={form.note} />}
-                </div>
-                {error && <p style={errorText}>{error}</p>}
-                <button onClick={submit} disabled={submitting} style={submitButton(submitting)}>
-                  {submitting ? <><Loader2 size={18} className="animate-spin" />送出中</> : '確認送出預約'}
-                </button>
-              </section>
+      {/* ── 聯絡資料（LINE 已帶入時略過；從確認頁按「修改」也會到這裡） ── */}
+      {step === 2 && (
+        <div key="s2" className="bk-step-content flex flex-1 flex-col gap-3">
+          <BackHeader title="怎麼聯絡你" progress={3} onBack={() => setStep(1)} />
+          <div className="flex flex-col gap-4 rounded-2xl bg-surface p-5">
+            {returning && (
+              <p className="rounded-lg bg-sage-fresh px-4 py-2.5 text-[13px] text-visit-green-ink">已由 LINE 帶入你上次的資料，可以直接修改。</p>
             )}
+            <Field id="bk-name" label="姓名" value={form.name} onChange={v => setField('name', v)}
+              placeholder="請輸入你的姓名" autoComplete="name" />
+            <Field id="bk-phone" label="手機號碼" value={form.phone} onChange={v => setField('phone', v)}
+              placeholder="09xxxxxxxx" type="tel" autoComplete="tel" hint="用來聯繫與確認預約" />
+            <Field id="bk-email" label="電子信箱（選填）" value={form.email} onChange={v => setField('email', v)}
+              placeholder="確認信會寄到這裡" type="email" autoComplete="email" />
+          </div>
+          <button onClick={() => setStep(3)} disabled={!step2Valid}
+            className="mt-auto flex h-[54px] shrink-0 items-center justify-center rounded-full bg-ink text-base font-medium tracking-wider text-paper transition-colors hover:bg-ink-soft disabled:bg-border-input disabled:text-ink-muted">
+            下一步
+          </button>
+        </div>
+      )}
+
+      {/* ── 3 確認 ── */}
+      {step === 3 && (
+        <div key="s3" className="bk-step-content flex flex-1 flex-col gap-3">
+          <BackHeader title="確認一下" progress={3} onBack={() => setStep(1)} />
+
+          <div className="flex flex-col gap-[18px] rounded-2xl bg-ink px-[22px] py-6 text-paper">
+            <div className="flex flex-col gap-1">
+              <span className="text-[13px] text-sage-soft">{longDate(form.date)}</span>
+              <span className="num text-[56px] font-medium leading-none">{form.time}</span>
+            </div>
+            <div className="h-px bg-[#4A4A45]" />
+            <div className="flex items-end justify-between gap-3">
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="font-heading text-[19px] font-semibold tracking-wider">{selectedService?.name}</span>
+                <span className="text-[13px] text-[#D9D9D1]">
+                  {selectedService ? `${selectedService.durationMin} 分鐘，預計 ${addMinutes(form.time, selectedService.durationMin)} 結束` : ''}
+                </span>
+              </span>
+              <span className="num shrink-0 text-2xl font-semibold">
+                {selectedService ? `NT$ ${selectedService.price.toLocaleString()}` : ''}
+              </span>
             </div>
           </div>
 
-          <div style={navBar}>
-            {step > 0 ? (
-              <button onClick={() => setStep(s => s - 1)} style={backButton} className="bk-nav-btn">
-                <ChevronLeft size={18} />上一步
-              </button>
-            ) : <div />}
-            {step < 3 && (
-              <button onClick={() => setStep(s => s + 1)} disabled={isDisabled} style={nextButton(isDisabled)} className="bk-nav-btn">
-                下一步
-              </button>
-            )}
+          <div className="flex items-center justify-between gap-3 rounded-xl bg-surface py-3.5 pl-[18px] pr-3">
+            <span className="flex min-w-0 flex-col gap-0.5">
+              <span className="text-xs text-ink-muted">預約人{returning ? '（由 LINE 帶入）' : ''}</span>
+              <span className="truncate text-[15px] font-medium text-ink">{form.name}　{form.phone}</span>
+            </span>
+            <button onClick={() => setStep(2)}
+              className="flex h-11 shrink-0 items-center px-3.5 text-[13px] text-ink underline underline-offset-4">修改</button>
           </div>
-          </>
+
+          <div className="flex flex-col gap-2 rounded-xl bg-surface px-[18px] py-4">
+            <label htmlFor="bk-note" className="text-[13px] font-medium text-ink">想先告訴我們的事（選填）</label>
+            <textarea id="bk-note" rows={3} value={form.note} onChange={e => setField('note', e.target.value)}
+              placeholder="例如：身體狀況、過敏史、想加強的部位"
+              className="w-full resize-none rounded-lg border border-border-input bg-[#F7F7F3] px-3.5 py-3 text-base leading-relaxed text-ink outline-none placeholder:text-ink-faint focus:border-ink" />
+          </div>
+
+          {lineUserId && (
+            <p className="px-1.5 text-[13px] leading-relaxed text-ink-soft">預約前一天會用 LINE 提醒你。</p>
           )}
-        </section>
-      </main>
+
+          <section aria-labelledby="bk-notice-title" className="flex flex-col gap-3 rounded-xl bg-surface px-[18px] py-4">
+            <h2 id="bk-notice-title" className="font-heading text-[17px] font-semibold tracking-[0.15em] text-ink">{BOOKING_NOTICE.title}</h2>
+            <p className="text-[13px] leading-relaxed text-ink-soft">{BOOKING_NOTICE.intro}</p>
+            <ul className="flex flex-col">
+              {BOOKING_NOTICE.items.map(item => (
+                <li key={item} className="flex gap-2.5 border-b border-dashed border-border-input py-2.5 text-[13px] leading-relaxed text-ink last:border-0">
+                  <span aria-hidden="true" className="shrink-0 text-ink-muted">✧</span>{item}
+                </li>
+              ))}
+            </ul>
+            <p className="text-[13px] leading-relaxed text-ink-muted">{BOOKING_NOTICE.closing}</p>
+            <label className={`flex min-h-[52px] cursor-pointer items-center gap-3 rounded-lg px-3.5 py-2.5 text-sm transition-colors ${
+              agreed ? 'bg-sage-fresh text-ink' : 'bg-surface-muted text-ink'
+            }`}>
+              <input type="checkbox" checked={agreed} onChange={e => setAgreed(e.target.checked)}
+                className="size-5 shrink-0 cursor-pointer accent-[#1C1C1A]" />
+              <span className="font-medium">{BOOKING_NOTICE.agree}</span>
+            </label>
+          </section>
+
+          {error && (
+            <p role="alert" className="rounded-lg bg-visit-red-bg px-4 py-3 text-sm text-visit-red-ink">{error}</p>
+          )}
+
+          <button onClick={submit} disabled={submitting || !agreed}
+            className="mt-auto flex h-[54px] shrink-0 items-center justify-center gap-2 rounded-full bg-ink text-base font-medium tracking-[0.25em] text-paper transition-colors hover:bg-ink-soft disabled:opacity-60">
+            {submitting ? <><Loader2 size={18} className="animate-spin" />送出中</> : agreed ? '送出預約' : '請先勾選同意預約須知'}
+          </button>
+        </div>
+      )}
+    </Shell>
+  )
+}
+
+// ── 小元件 ────────────────────────────────────────────────────────────────────
+
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="mx-auto flex min-h-dvh w-full max-w-[460px] flex-col gap-3 px-4 pt-3"
+      style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) + 20px)' }}>
+      {children}
     </div>
   )
 }
 
-function Stepper({ step }: { step: number }) {
+/** 三步進度：選服務 → 選時段 → 確認 */
+function Progress({ current }: { current: 1 | 2 | 3 }) {
   return (
-    <div style={stepper}>
-      {STEPS.map((label, i) => {
-        const active = i <= step
-        return (
-          <div key={label} style={stepItem}>
-            <div style={stepDot(active, i < step)}>{i < step ? <Check size={13} /> : i + 1}</div>
-            <span style={{ color: active ? C.accentH : C.text4, fontSize: 11, fontWeight: active ? 700 : 500 }}>{label}</span>
-          </div>
-        )
-      })}
+    <div role="img" aria-label={`步驟 ${current}／3`} className="flex items-center gap-1.5">
+      {[1, 2, 3].map(i => (
+        <span key={i} className={`h-1 w-6 rounded-full ${i <= current ? 'bg-ink' : 'bg-border-input'}`} />
+      ))}
+      {current === 1 && <span className="ml-1 text-xs text-ink-muted">選服務 → 選時段 → 確認</span>}
     </div>
   )
 }
 
-function InfoTile({ label, value }: { label: string; value: string }) {
+function BackHeader({ title, progress, onBack }: { title: string; progress?: 1 | 2 | 3; onBack: () => void }) {
   return (
-    <div style={infoTile}>
-      <p style={{ color: 'rgba(255,255,255,0.58)', fontSize: 11, margin: 0 }}>{label}</p>
-      <p style={{ color: '#FFFFFF', fontSize: 14, fontWeight: 700, margin: '5px 0 0' }}>{value}</p>
+    <div className="flex items-center gap-2.5">
+      <button onClick={onBack} aria-label="回上一步"
+        className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface text-ink">
+        <ChevronLeft size={18} strokeWidth={1.6} />
+      </button>
+      <h1 className="flex-1 text-[22px] font-medium text-ink">{title}</h1>
+      {progress && <Progress current={progress} />}
     </div>
   )
 }
 
-function SectionTitle({ icon, title, subtitle, dense }: { icon: ReactNode; title: string; subtitle?: string; dense?: boolean }) {
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: dense ? 12 : 20 }}>
-      <div style={sectionIcon}>{icon}</div>
-      <div>
-        <h3 style={{ color: C.text, fontSize: 17, fontWeight: 750, margin: 0 }}>{title}</h3>
-        {subtitle && <p style={{ color: C.text4, fontSize: 13, margin: '3px 0 0', lineHeight: 1.6 }}>{subtitle}</p>}
-      </div>
-    </div>
+    <button onClick={onClick} aria-pressed={active}
+      className={`h-11 shrink-0 whitespace-nowrap rounded-full px-4 text-[13px] transition-colors ${
+        active ? 'bg-ink text-paper' : 'bg-surface text-ink'
+      }`}>
+      {children}
+    </button>
   )
 }
 
 function LoadingState({ text, compact }: { text: string; compact?: boolean }) {
   return (
-    <div style={{ color: C.text3, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: compact ? '18px 0' : '44px 0', fontSize: 14 }}>
+    <div role="status" className={`flex items-center justify-center gap-2 text-sm text-ink-muted ${compact ? 'py-5' : 'py-11'}`}>
       <Loader2 size={18} className="animate-spin" />{text}
     </div>
   )
 }
 
-function EmptyState({ text }: { text: string }) {
-  return <div style={{ color: C.text3, background: C.elevated, border: `1px solid ${C.border}`, padding: 16, fontSize: 14, textAlign: 'center' }}>{text}</div>
-}
-
-function Label({ icon, label }: { icon: ReactNode; label: string }) {
-  return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 7, color: C.text2, fontSize: 13, fontWeight: 700, marginBottom: 7 }}>
-      <span style={{ color: C.accentH }}>{icon}</span>{label}
-    </label>
-  )
-}
-
-function Field({ icon, label, value, onChange, placeholder, type = 'text' }: {
-  icon: ReactNode
+function Field({ id, label, value, onChange, placeholder, type = 'text', autoComplete, hint }: {
+  id: string
   label: string
   value: string
   onChange: (v: string) => void
   placeholder?: string
   type?: string
+  autoComplete?: string
+  hint?: string
 }) {
   return (
-    <div>
-      <Label icon={icon} label={label} />
-      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} style={inputStyle} />
+    <div className="flex flex-col gap-1.5">
+      <label htmlFor={id} className="text-[13px] font-medium text-ink">{label}</label>
+      <input id={id} type={type} value={value} onChange={e => onChange(e.target.value)}
+        placeholder={placeholder} autoComplete={autoComplete}
+        className="h-[50px] w-full rounded-lg border border-border-input bg-[#F7F7F3] px-4 text-base text-ink outline-none placeholder:text-ink-faint focus:border-ink" />
+      {hint && <span className="text-xs text-ink-muted">{hint}</span>}
     </div>
   )
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={summaryRow}>
-      <span style={{ color: C.text4, fontSize: 13, flexShrink: 0 }}>{label}</span>
-      <span style={{ color: C.text, fontSize: 14, fontWeight: 700, textAlign: 'right', wordBreak: 'break-word' }}>{value}</span>
-    </div>
-  )
-}
-
-const pageShell: CSSProperties = {
-  minHeight: '100vh',
-  background: C.bg,
-  padding: '28px 16px',
-}
-
-const layout: CSSProperties = {
-  width: '100%',
-  maxWidth: 1120,
-  margin: '0 auto',
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: 24,
-  alignItems: 'stretch',
-}
-
-const brandPanel: CSSProperties = {
-  flex: '1 1 320px',
-  minWidth: 0,
-  background: `linear-gradient(145deg, ${C.dark2}, ${C.accent})`,
-  minHeight: 420,
-  padding: 34,
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'space-between',
-  color: '#FFFFFF',
-}
-
-const brandIcon: CSSProperties = {
-  width: 42,
-  height: 42,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  border: '1px solid rgba(255,255,255,0.26)',
-  background: 'rgba(255,255,255,0.12)',
-  marginBottom: 28,
-}
-
-const eyebrow: CSSProperties = {
-  color: C.accentH,
-  fontSize: 11,
-  fontWeight: 800,
-  letterSpacing: '0.24em',
-  margin: 0,
-}
-
-const brandTitle: CSSProperties = {
-  color: '#FFFFFF',
-  fontSize: 34,
-  lineHeight: 1.2,
-  fontWeight: 750,
-  margin: '12px 0 0',
-}
-
-const brandText: CSSProperties = {
-  color: 'rgba(255,255,255,0.74)',
-  fontSize: 15,
-  lineHeight: 1.8,
-  maxWidth: 360,
-  margin: '18px 0 0',
-}
-
-const brandInfoGrid: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: 1,
-  background: 'rgba(255,255,255,0.18)',
-  border: '1px solid rgba(255,255,255,0.18)',
-}
-
-const infoTile: CSSProperties = {
-  background: 'rgba(59,45,34,0.32)',
-  padding: 16,
-}
-
-const card: CSSProperties = {
-  flex: '1 1 380px',
-  minWidth: 0,
-  background: C.surface,
-  border: `1px solid ${C.border}`,
-  boxShadow: C.shadow,
-  minHeight: 620,
-  display: 'flex',
-  flexDirection: 'column',
-}
-
-const cardHeader: CSSProperties = {
-  padding: '24px 24px 18px',
-  borderBottom: `1px solid ${C.border}`,
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: 16,
-  alignItems: 'flex-start',
-}
-
-const priceHint: CSSProperties = {
-  color: C.accentH,
-  background: C.accentBg,
-  border: `1px solid ${C.borderStrong}`,
-  padding: '8px 10px',
-  fontSize: 12,
-  fontWeight: 800,
-  whiteSpace: 'nowrap',
-}
-
-const stepper: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-  gap: 6,
-  padding: '16px 20px',
-  borderBottom: `1px solid ${C.border}`,
-  background: C.elevated,
-}
-
-const stepItem: CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  gap: 6,
-  minWidth: 0,
-}
-
-const sectionIcon: CSSProperties = {
-  width: 34,
-  height: 34,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  flexShrink: 0,
-  color: C.accentH,
-  background: C.accentBg,
-  border: `1px solid ${C.border}`,
-}
-
-const stepDot = (active: boolean, done: boolean): CSSProperties => ({
-  width: 26,
-  height: 26,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderRadius: 999,
-  background: active ? C.accent : C.surface,
-  color: active ? '#FFFFFF' : C.text4,
-  border: `1px solid ${active ? C.accent : C.borderStrong}`,
-  fontSize: done ? 0 : 12,
-  fontWeight: 800,
-  transition: 'background 0.25s, border-color 0.25s, color 0.25s',
-})
-
-const content: CSSProperties = {
-  padding: 24,
-  flex: 1,
-}
-
-const modeTabs: CSSProperties = {
-  display: 'flex',
-  gap: 8,
-  padding: '0 24px',
-  marginTop: 4,
-}
-
-const modeTab = (active: boolean): CSSProperties => ({
-  flex: 1,
-  border: `1px solid ${active ? C.accent : C.border}`,
-  background: active ? C.accentBg : 'transparent',
-  color: active ? C.accentH : C.text3,
-  padding: '9px 0',
-  fontSize: 13,
-  fontWeight: 700,
-  cursor: 'pointer',
-  transition: 'background 0.18s, border-color 0.18s, color 0.18s',
-})
-
-const categoryTabs: CSSProperties = {
-  display: 'flex',
-  gap: 8,
-  overflowX: 'auto',
-  paddingBottom: 6,
-  marginBottom: 18,
-}
-
-const tabStyle = (active: boolean): CSSProperties => ({
-  border: `1px solid ${active ? C.accent : C.border}`,
-  background: active ? C.dark : C.surface,
-  color: active ? '#FFFFFF' : C.text2,
-  padding: '10px 14px',
-  fontSize: 13,
-  fontWeight: 750,
-  whiteSpace: 'nowrap',
-  cursor: 'pointer',
-  transition: 'background 0.18s, border-color 0.18s, color 0.18s',
-})
-
-const serviceList: CSSProperties = {
-  display: 'grid',
-  gap: 10,
-}
-
-const serviceStyle = (active: boolean): CSSProperties => ({
-  width: '100%',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  gap: 16,
-  textAlign: 'left',
-  border: `1.5px solid ${active ? C.accent : C.border}`,
-  background: active ? C.accentBg : C.surface,
-  padding: '16px 15px',
-  cursor: 'pointer',
-  transition: 'background 0.18s, border-color 0.18s',
-})
-
-const selectedServiceBar: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  gap: 16,
-  background: C.elevated,
-  border: `1px solid ${C.border}`,
-  padding: 14,
-  marginBottom: 18,
-}
-
-const plainButton: CSSProperties = {
-  background: 'transparent',
-  border: 'none',
-  color: C.accentH,
-  fontSize: 13,
-  fontWeight: 800,
-  cursor: 'pointer',
-}
-
-const dateStrip: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(7, minmax(68px, 1fr))',
-  gap: 8,
-  overflowX: 'auto',
-  paddingBottom: 6,
-}
-
-const dateChipStyle = (active: boolean): CSSProperties => ({
-  minHeight: 72,
-  border: `1.5px solid ${active ? C.accent : C.border}`,
-  background: active ? C.accent : C.surface,
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 5,
-  cursor: 'pointer',
-  transition: 'background 0.18s, border-color 0.18s',
-})
-
-const datePickerLabel: CSSProperties = {
-  marginTop: 14,
-  display: 'grid',
-  gridTemplateColumns: '92px 1fr',
-  alignItems: 'center',
-  border: `1px solid ${C.border}`,
-  background: C.elevated,
-  color: C.text2,
-  fontSize: 13,
-  fontWeight: 700,
-  padding: '8px 12px',
-}
-
-const dateInput: CSSProperties = {
-  width: '100%',
-  border: 'none',
-  outline: 'none',
-  background: 'transparent',
-  color: C.text,
-  fontSize: 15,
-}
-
-const warningText: CSSProperties = {
-  color: C.warning,
-  background: 'rgba(184,132,43,0.10)',
-  border: `1px solid rgba(184,132,43,0.22)`,
-  padding: '10px 12px',
-  fontSize: 13,
-  margin: '14px 0 0',
-}
-
-const slotGrid: CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-  gap: 8,
-}
-
-const slotStyle = (active: boolean): CSSProperties => ({
-  height: 46,
-  border: `1.5px solid ${active ? C.accent : C.border}`,
-  background: active ? C.accent : C.surface,
-  color: active ? '#FFFFFF' : C.text,
-  fontSize: 15,
-  fontWeight: 800,
-  cursor: 'pointer',
-  transition: 'background 0.18s, border-color 0.18s, color 0.18s',
-})
-
-const fieldGrid: CSSProperties = {
-  display: 'grid',
-  gap: 16,
-}
-
-const inputStyle: CSSProperties = {
-  width: '100%',
-  border: `1.5px solid ${C.border}`,
-  background: C.elevated,
-  color: C.text,
-  padding: '12px 13px',
-  fontSize: 15,
-  outline: 'none',
-  boxSizing: 'border-box',
-}
-
-const summaryBox: CSSProperties = {
-  background: C.elevated,
-  border: `1px solid ${C.border}`,
-  padding: '4px 15px',
-}
-
-const summaryRow: CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: 16,
-  padding: '12px 0',
-  borderBottom: `1px solid ${C.border}`,
-}
-
-const errorText: CSSProperties = {
-  color: C.danger,
-  background: C.dangerBg,
-  padding: '11px 13px',
-  fontSize: 14,
-  margin: '16px 0 0',
-}
-
-const submitButton = (loading: boolean): CSSProperties => ({
-  width: '100%',
-  border: 'none',
-  background: loading ? C.borderStrong : C.dark,
-  color: '#FFFFFF',
-  padding: '15px 16px',
-  fontSize: 15,
-  fontWeight: 800,
-  cursor: loading ? 'not-allowed' : 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 8,
-  marginTop: 18,
-})
-
-const navBar: CSSProperties = {
-  borderTop: `1px solid ${C.border}`,
-  padding: 18,
-  display: 'flex',
-  justifyContent: 'space-between',
-  gap: 12,
-}
-
-const backButton: CSSProperties = {
-  border: `1.5px solid ${C.borderStrong}`,
-  background: 'transparent',
-  color: C.text2,
-  padding: '12px 15px',
-  fontSize: 14,
-  fontWeight: 800,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 5,
-  cursor: 'pointer',
-}
-
-const nextButton = (disabled: boolean): CSSProperties => ({
-  marginLeft: 'auto',
-  border: 'none',
-  background: disabled ? C.border : C.dark,
-  color: '#FFFFFF',
-  padding: '12px 24px',
-  fontSize: 14,
-  fontWeight: 800,
-  cursor: disabled ? 'not-allowed' : 'pointer',
-  minWidth: 140,
-})
-
-const pageCenter: CSSProperties = {
-  minHeight: '100vh',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: 18,
-  background: C.bg,
-}
-
-const successCard: CSSProperties = {
-  width: '100%',
-  maxWidth: 430,
-  background: C.surface,
-  border: `1px solid ${C.border}`,
-  boxShadow: C.shadow,
-  padding: 30,
-  textAlign: 'center',
-}
-
-const successMark: CSSProperties = {
-  width: 72,
-  height: 72,
-  background: C.success,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderRadius: '50%',
-  margin: '0 auto 20px',
 }

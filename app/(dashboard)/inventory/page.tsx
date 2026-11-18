@@ -1,7 +1,11 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
-import { Plus, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Minus, Plus } from 'lucide-react'
+import {
+  PageHeader, FilterChip, Tag, SearchInput, Modal, FormField, EmptyState,
+  btnPrimary, btnSecondary, btnOutline, btnDanger, btnText, inputCls,
+} from '@/components/ui/kit'
 
 type Item = { id: string; name: string; brand: string | null; category: string; quantity: number; alertLevel: number; unit: string; note: string | null }
 type Entry = { id: string; itemId: string; itemName: string; unit: string; expected: number; actual: number }
@@ -9,27 +13,38 @@ type Session = { id: string; createdAt: string; completedAt: string | null; note
 
 const CATEGORIES = ['保養品', '精油', '耗材', '其他'] as const
 const EMPTY = { name: '', brand: '', category: CATEGORIES[0] as string, quantity: '', alertLevel: '', unit: '', note: '' }
+const LIST_COLS = 'lg:grid-cols-[1.5fr_0.7fr_1.3fr_0.8fr_0.7fr_auto]'
+
+function fmtDate(iso: string) {
+  const d = new Date(iso)
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
 
 export default function InventoryPage() {
   const [items, setItems] = useState<Item[]>([])
+  const [loaded, setLoaded] = useState(false)
   const [filterCat, setFilterCat] = useState<string>('全部')
+  const [lowOnly, setLowOnly] = useState(false)
+  const [q, setQ] = useState('')
   const [editing, setEditing] = useState<Item | null>(null)
   const [adding, setAdding] = useState(false)
   const [adjusting, setAdjusting] = useState<Item | null>(null)
   const [adjustDelta, setAdjustDelta] = useState('')
   const [form, setForm] = useState(EMPTY)
   const [saving, setSaving] = useState(false)
+  const [busyId, setBusyId] = useState<string | null>(null)
 
-  // Stockcheck
+  // 盤點
   const [checking, setChecking] = useState(false)
   const [session, setSession] = useState<Session | null>(null)
   const [actuals, setActuals] = useState<Record<string, string>>({})
   const [sessions, setSessions] = useState<Session[]>([])
-  const [showHistory, setShowHistory] = useState(false)
+  const [openSession, setOpenSession] = useState<string | null>(null)
 
   async function load() {
     const res = await fetch('/api/inventory')
     if (res.ok) setItems(await res.json())
+    setLoaded(true)
   }
   async function loadHistory() {
     const res = await fetch('/api/inventory/stockcheck')
@@ -37,21 +52,22 @@ export default function InventoryPage() {
   }
   useEffect(() => { load(); loadHistory() }, [])
 
-  const lowCount = items.filter(i => i.quantity <= i.alertLevel).length
-  const filtered = filterCat === '全部' ? items : items.filter(i => i.category === filterCat)
-  const grouped = useMemo(() => {
-    const map: Record<string, Item[]> = {}
-    CATEGORIES.forEach(c => { map[c] = [] })
-    filtered.forEach(i => { (map[i.category] ??= []).push(i) })
-    return map
-  }, [filtered])
+  const isLow = (i: Item) => i.quantity <= i.alertLevel
+  const lowCount = items.filter(isLow).length
+  const allCats = [...new Set<string>([...CATEGORIES, ...items.map(i => i.category)])]
+  const keyword = q.trim().toLowerCase()
+  const visible = items
+    .filter(i => filterCat === '全部' || i.category === filterCat)
+    .filter(i => !lowOnly || isLow(i))
+    .filter(i => !keyword || i.name.toLowerCase().includes(keyword) || (i.brand ?? '').toLowerCase().includes(keyword))
+    // 低庫存排前面，其餘依名稱
+    .sort((a, b) => Number(isLow(b)) - Number(isLow(a)) || a.name.localeCompare(b.name, 'zh-Hant'))
 
   function openAdd() { setForm(EMPTY); setAdding(true) }
   function openEdit(item: Item) {
     setForm({ name: item.name, brand: item.brand ?? '', category: item.category, quantity: String(item.quantity), alertLevel: String(item.alertLevel), unit: item.unit, note: item.note ?? '' })
     setEditing(item)
   }
-  function openAdjust(item: Item) { setAdjustDelta(''); setAdjusting(item) }
 
   async function handleSave() {
     setSaving(true)
@@ -66,19 +82,30 @@ export default function InventoryPage() {
     setSaving(false); load()
   }
 
+  async function adjust(item: Item, delta: number) {
+    if (!delta) return
+    setBusyId(item.id)
+    // 先更新畫面，請求失敗再重新載入
+    setItems(prev => prev.map(i => (i.id === item.id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i)))
+    const res = await fetch(`/api/inventory/${item.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ adjust: delta }),
+    })
+    if (!res.ok) load()
+    setBusyId(null)
+  }
+
   async function handleAdjust(dir: 1 | -1) {
     if (!adjusting || !adjustDelta) return
     setSaving(true)
-    await fetch(`/api/inventory/${adjusting.id}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ adjust: dir * Number(adjustDelta) }),
-    })
-    setSaving(false); setAdjusting(null); load()
+    await adjust(adjusting, dir * Number(adjustDelta))
+    setSaving(false); setAdjusting(null)
   }
 
   async function handleDelete(id: string, name: string) {
     if (!confirm(`確定要刪除「${name}」？`)) return
-    await fetch(`/api/inventory/${id}`, { method: 'DELETE' }); load()
+    await fetch(`/api/inventory/${id}`, { method: 'DELETE' })
+    setEditing(null); load()
   }
 
   async function startStockcheck() {
@@ -107,301 +134,219 @@ export default function InventoryPage() {
   }
 
   const showModal = adding || !!editing
-  const visibleCats = filterCat === '全部' ? [...CATEGORIES] : [filterCat]
 
   return (
-    <div className="relative flex flex-col flex-1 overflow-hidden">
-      <header className="h-auto min-h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 lg:px-8 py-3 sm:py-0 shrink-0">
-        <div className="flex items-center gap-4">
-          <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-3)] uppercase">庫存管理</p>
-          {lowCount > 0 && (
-            <span className="flex items-center gap-1.5 text-[10px] text-[#A06060] tracking-wide">
-              <AlertTriangle size={11} strokeWidth={1.5} />{lowCount} 項低庫存
-            </span>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button onClick={startStockcheck} disabled={saving}
-            className="border border-[var(--t-border-s)] text-[var(--t-text-3)] hover:border-[var(--t-accent)] hover:text-[var(--t-accent)] px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200 disabled:opacity-40">
-            開始盤點
-          </button>
-          <button onClick={openAdd}
-            className="flex items-center gap-2 border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">
-            <Plus size={11} />新增品項
-          </button>
-        </div>
-      </header>
+    <div className="relative flex flex-1 flex-col overflow-hidden" style={{ background: 'var(--t-bg)' }}>
+      <PageHeader title="庫存" meta={`${items.length} 個品項${lowCount ? `，${lowCount} 項低庫存` : ''}`}>
+        <SearchInput value={q} onChange={setQ} placeholder="搜尋品項或品牌" className="hidden w-[240px] lg:flex" />
+        <button onClick={startStockcheck} disabled={saving || items.length === 0} className={btnSecondary}>開始盤點</button>
+        <button onClick={openAdd} className={btnPrimary}><Plus size={16} strokeWidth={1.8} />新增品項</button>
+      </PageHeader>
 
-      <main className="flex-1 bg-[var(--t-bg)] p-4 lg:p-8 overflow-auto">
-        {/* Tabs */}
-        <div className="flex items-center gap-6 mb-8 border-b border-[var(--t-border)] pb-0">
-          {(['全部', ...CATEGORIES] as const).map(cat => (
-            <button key={cat} onClick={() => setFilterCat(cat)}
-              className={`pb-3 text-[10px] tracking-[0.25em] border-b-[1.5px] -mb-px transition-colors ${
-                filterCat === cat ? 'border-[var(--t-accent)] text-[var(--t-accent)]' : 'border-transparent text-[var(--t-text-3)] hover:text-[var(--t-text-2)]'
-              }`}>
-              {cat}
-            </button>
+      <div className="flex shrink-0 flex-col gap-2.5 px-4 pt-2 lg:px-5">
+        <SearchInput value={q} onChange={setQ} placeholder="搜尋品項或品牌" className="lg:hidden" />
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 lg:mx-0 lg:flex-wrap lg:px-0">
+          {(['全部', ...allCats]).map(cat => (
+            <FilterChip key={cat} active={filterCat === cat} onClick={() => setFilterCat(cat)}>
+              {cat}{cat !== '全部' && `　${items.filter(i => i.category === cat).length}`}
+            </FilterChip>
           ))}
+          <FilterChip active={lowOnly} onClick={() => setLowOnly(v => !v)}>低庫存　{lowCount}</FilterChip>
         </div>
+      </div>
 
-        <div className="space-y-6 lg:space-y-8">
-          {visibleCats.map(cat => {
-            const catItems = grouped[cat] ?? []
-            return (
-              <div key={cat}>
-                <div className="flex items-center gap-4 mb-4">
-                  <p className="text-[10px] tracking-[0.3em] text-[var(--t-accent)]">{cat}</p>
-                  <div className="flex-1 h-px bg-[var(--t-border)]" />
-                  <p className="text-[10px] text-[var(--t-text-4)] tracking-wide">{catItems.length} 項</p>
-                </div>
-                <div className="bg-[var(--t-surface)] border border-[var(--t-border)] overflow-x-auto">
-                  <table className="w-full min-w-[480px] table-fixed">
-                    <colgroup>
-                      <col className="w-auto" /><col style={{ width: '80px' }} /><col style={{ width: '120px' }} /><col style={{ width: '100px' }} /><col style={{ width: '130px' }} />
-                    </colgroup>
-                    <thead>
-                      <tr className="border-b border-[var(--t-border)]">
-                        {['品項名稱', '單位', '警示量', '庫存量', ''].map((h, i) => (
-                          <th key={i} className={`text-[10px] font-normal text-[var(--t-text-4)] tracking-[0.25em] uppercase py-3 ${i === 0 ? 'text-left px-7' : 'text-right px-7'}`}>{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {catItems.length === 0 ? (
-                        <tr><td colSpan={5} className="px-7 py-6 text-[10px] text-[var(--t-text-4)] tracking-wide">尚無品項</td></tr>
-                      ) : catItems.map(item => {
-                        const low = item.quantity <= item.alertLevel
-                        return (
-                          <tr key={item.id} className="border-b border-[var(--t-border)] last:border-0 hover:bg-[var(--t-bg)] transition-colors group">
-                            <td className="px-7 py-4">
-                              <p className="text-sm font-light text-[var(--t-text)] tracking-wide">{item.name}</p>
-                              <p className="text-[10px] text-[var(--t-text-4)] tracking-wide mt-0.5">
-                                {[item.brand, item.note].filter(Boolean).join('　·　')}
-                              </p>
-                            </td>
-                            <td className="px-7 py-4 text-right text-xs text-[var(--t-text-3)]">{item.unit}</td>
-                            <td className="px-7 py-4 text-right text-xs text-[var(--t-text-3)] tabular-nums">{item.alertLevel}</td>
-                            <td className="px-7 py-4 text-right tabular-nums">
-                              <span className={`text-sm font-light ${low ? 'text-[#A06060]' : 'text-[var(--t-text)]'}`}>{item.quantity}</span>
-                              {low && <AlertTriangle size={10} strokeWidth={1.5} className="inline ml-1.5 text-[#A06060]" />}
-                            </td>
-                            <td className="px-7 py-4 text-right">
-                              <span className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end gap-4">
-                                <button onClick={() => openAdjust(item)} className="text-[10px] tracking-wide text-[var(--t-text-3)] hover:text-[var(--t-accent)] transition-colors">調整</button>
-                                <button onClick={() => openEdit(item)} className="text-[10px] tracking-wide text-[var(--t-text-3)] hover:text-[var(--t-accent)] transition-colors">編輯</button>
-                                <button onClick={() => handleDelete(item.id, item.name)} className="text-[10px] tracking-wide text-[var(--t-text-3)] hover:text-[#A05050] transition-colors">刪除</button>
-                              </span>
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+      <div className="flex flex-1 flex-col gap-5 overflow-auto px-4 pb-4 pt-3 lg:flex-row lg:items-start lg:overflow-hidden lg:px-5 lg:pb-5">
+        {/* ── 品項清單 ── */}
+        <section className="flex min-w-0 flex-col rounded-2xl bg-surface lg:max-h-full lg:flex-[2.4] lg:overflow-hidden">
+          {!loaded ? (
+            <p className="px-6 py-10 text-center text-[13px] text-ink-muted">載入中…</p>
+          ) : visible.length === 0 ? (
+            <EmptyState title={items.length === 0 ? '還沒有庫存品項' : '沒有符合條件的品項'}
+              hint={items.length === 0 ? '按「新增品項」建立第一項。' : '換個篩選條件試試。'} />
+          ) : (
+            <div className="overflow-auto px-2 pb-2 pt-4">
+              <div className={`hidden gap-3 px-3.5 pb-2 text-xs text-ink-muted lg:grid ${LIST_COLS}`}>
+                <span>品項</span><span>分類</span><span>剩餘數量</span><span>安全庫存</span><span>狀態</span><span className="w-12" />
               </div>
-            )
-          })}
-        </div>
+              {visible.map(item => {
+                const low = isLow(item)
+                return (
+                  <div key={item.id}
+                    className={`grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-1 border-t border-line-soft px-3.5 py-2.5 first-of-type:border-t-0 lg:min-h-[60px] lg:border-t ${LIST_COLS}`}>
+                    <button onClick={() => openEdit(item)} className="flex min-w-0 flex-col items-start gap-0.5 text-left">
+                      <span className="truncate text-[15px] font-medium text-ink lg:text-sm">{item.name}</span>
+                      <span className="flex items-center gap-1.5 text-xs text-ink-muted">
+                        {[item.brand, item.note].filter(Boolean).join('・') || <span className="lg:hidden">{item.category}</span>}
+                        {low && <span className="lg:hidden"><Tag kind="warn">低庫存</Tag></span>}
+                      </span>
+                    </button>
+                    <span className="hidden text-sm text-ink-soft lg:block">{item.category}</span>
+                    <Stepper item={item} busy={busyId === item.id} onAdjust={d => adjust(item, d)} onOpen={() => { setAdjustDelta(''); setAdjusting(item) }} />
+                    <span className="hidden text-sm text-ink-soft lg:block">{item.alertLevel} {item.unit}</span>
+                    <span className="hidden lg:block">{low ? <Tag kind="warn">低庫存</Tag> : <Tag kind="sage">充足</Tag>}</span>
+                    <button onClick={() => openEdit(item)} className={`${btnText} hidden lg:inline-flex`}>編輯</button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
 
-        {/* History */}
-        {sessions.length > 0 && (
-          <div className="mt-12">
-            <button onClick={() => setShowHistory(h => !h)}
-              className="flex items-center gap-3 mb-4 text-[10px] tracking-[0.3em] text-[var(--t-text-3)] uppercase hover:text-[var(--t-text-2)] transition-colors">
-              盤點紀錄
-              {showHistory ? <ChevronUp size={11} strokeWidth={1.5} /> : <ChevronDown size={11} strokeWidth={1.5} />}
-            </button>
-            {showHistory && (
-              <div className="bg-[var(--t-surface)] border border-[var(--t-border)]">
-                {sessions.map((s, si) => (
-                  <div key={s.id} className={si < sessions.length - 1 ? 'border-b border-[var(--t-border)]' : ''}>
-                    <div className="px-7 py-4 flex items-center justify-between">
-                      <div>
-                        <p className="text-xs font-light text-[var(--t-text)] tracking-wide">
-                          {new Date(s.createdAt).toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric' })}
-                        </p>
-                        {s.note && <p className="text-[10px] text-[var(--t-text-4)] tracking-wide mt-0.5">{s.note}</p>}
-                      </div>
-                      <div className="flex items-center gap-6 text-right">
-                        <div>
-                          <p className="text-[10px] text-[var(--t-text-4)] tracking-wide mb-0.5">品項數</p>
-                          <p className="text-xs text-[var(--t-text-3)]">{s.entries.length}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-[var(--t-text-4)] tracking-wide mb-0.5">差異品項</p>
-                          <p className={`text-xs ${s.entries.some(e => e.actual !== e.expected) ? 'text-[#A06060]' : 'text-[#6B9E78]'}`}>
-                            {s.entries.filter(e => e.actual !== e.expected).length} 項
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                    {s.entries.some(e => e.actual !== e.expected) && (
-                      <div className="px-7 pb-4">
-                        <table className="w-full">
-                          <tbody>
-                            {s.entries.filter(e => e.actual !== e.expected).map(e => (
-                              <tr key={e.id}>
-                                <td className="py-1 text-xs text-[var(--t-text-2)] tracking-wide">{e.itemName}</td>
-                                <td className="py-1 text-right text-xs text-[var(--t-text-3)] tabular-nums">系統 {e.expected} → 實際 {e.actual} {e.unit}</td>
-                                <td className="py-1 text-right text-xs tabular-nums w-16">
-                                  <span className={e.actual - e.expected > 0 ? 'text-[#6B9E78]' : 'text-[#A06060]'}>
-                                    {e.actual - e.expected > 0 ? '+' : ''}{e.actual - e.expected}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+        {/* ── 盤點紀錄 ── */}
+        <section className="flex min-w-0 flex-col rounded-2xl bg-surface p-5 lg:max-h-full lg:flex-1 lg:overflow-hidden lg:p-[22px]">
+          <h2 className="pb-1 text-[19px] text-ink">盤點紀錄</h2>
+          {sessions.length === 0 ? (
+            <p className="py-3 text-[13px] text-ink-muted">還沒有盤點過。按「開始盤點」，依序填入實際數量即可。</p>
+          ) : (
+            <div className="-mx-1 overflow-auto px-1">
+              {sessions.map(s => {
+                const diffs = s.entries.filter(e => e.actual !== e.expected)
+                const open = openSession === s.id
+                return (
+                  <div key={s.id} className="border-b border-line-soft last:border-0">
+                    <button onClick={() => setOpenSession(open ? null : s.id)} aria-expanded={open}
+                      className="flex min-h-14 w-full items-center justify-between gap-2 py-2 text-left">
+                      <span className="flex flex-col gap-0.5">
+                        <span className="text-sm font-medium text-ink">{fmtDate(s.createdAt)} 盤點</span>
+                        <span className="text-xs text-ink-muted">
+                          {s.entries.length} 個品項，{diffs.length ? `調整 ${diffs.length} 項` : '無調整'}{s.note ? `・${s.note}` : ''}
+                        </span>
+                      </span>
+                      {diffs.length > 0 && <span className="text-xs text-ink-muted">{open ? '收合' : '明細'}</span>}
+                    </button>
+                    {open && diffs.length > 0 && (
+                      <div className="flex flex-col gap-1.5 pb-3">
+                        {diffs.map(e => {
+                          const d = e.actual - e.expected
+                          return (
+                            <div key={e.id} className="flex items-center justify-between gap-2 rounded-lg bg-surface-muted px-3 py-2 text-[13px]">
+                              <span className="min-w-0 truncate text-ink">{e.itemName}</span>
+                              <span className="shrink-0 text-ink-soft">
+                                {e.expected} → {e.actual} {e.unit}
+                                <span className={`ml-2 font-bold ${d > 0 ? 'text-visit-green-ink' : 'text-visit-red-ink'}`}>{d > 0 ? '+' : ''}{d}</span>
+                              </span>
+                            </div>
+                          )
+                        })}
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </main>
+                )
+              })}
+            </div>
+          )}
+        </section>
+      </div>
 
-      {/* Stockcheck overlay */}
+      {/* ── 盤點畫面 ── */}
       {checking && session && (
-        <div className="absolute inset-0 bg-[var(--t-bg)] z-40 flex flex-col">
-          <div className="h-auto min-h-14 border-b border-[var(--t-border)] bg-[var(--t-surface)] flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between px-4 lg:px-8 py-3 sm:py-0 shrink-0">
-            <div>
-              <p className="text-[10px] tracking-[0.35em] text-[var(--t-text-3)] uppercase">庫存盤點</p>
-              <p className="text-[10px] text-[var(--t-text-4)] tracking-wide mt-0.5">依序填入實際清點數量，差異欄位即時顯示</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <button onClick={() => setChecking(false)} className="border border-[var(--t-border-s)] text-[var(--t-text-3)] hover:text-[var(--t-text-2)] px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">取消</button>
-              <button onClick={confirmStockcheck} disabled={saving}
-                className="border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] disabled:opacity-40 px-5 py-1.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">
-                {saving ? '儲存中' : '確認盤點'}
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-auto p-4 lg:p-8">
-            <div className="bg-[var(--t-surface)] border border-[var(--t-border)] overflow-x-auto">
-              <table className="w-full min-w-[560px] table-fixed">
-                <colgroup>
-                  <col className="w-auto" />
-                  <col style={{ width: '80px' }} />
-                  <col style={{ width: '110px' }} />
-                  <col style={{ width: '130px' }} />
-                  <col style={{ width: '90px' }} />
-                </colgroup>
-                <thead>
-                  <tr className="border-b border-[var(--t-border)]">
-                    {['品項名稱', '單位', '系統量', '實際清點', '差異'].map((h, i) => (
-                      <th key={i} className={`text-[10px] font-normal text-[var(--t-text-4)] tracking-[0.25em] uppercase py-3 ${i === 0 ? 'text-left px-7' : 'text-right px-7'}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {session.entries.map(entry => {
-                    const actual = Number(actuals[entry.id] ?? entry.expected)
-                    const diff = actual - entry.expected
-                    return (
-                      <tr key={entry.id} className="border-b border-[var(--t-border)] last:border-0">
-                        <td className="px-7 py-3 text-sm font-light text-[var(--t-text)] tracking-wide">{entry.itemName}</td>
-                        <td className="px-7 py-3 text-right text-xs text-[var(--t-text-3)]">{entry.unit}</td>
-                        <td className="px-7 py-3 text-right text-sm text-[var(--t-text-3)] tabular-nums">{entry.expected}</td>
-                        <td className="px-7 py-2 text-right">
-                          <input
-                            type="number"
-                            value={actuals[entry.id] ?? String(entry.expected)}
-                            onChange={e => setActuals(prev => ({ ...prev, [entry.id]: e.target.value }))}
-                            className="w-20 bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-1 text-sm text-[var(--t-text)] text-right tabular-nums transition-colors"
-                          />
-                        </td>
-                        <td className="px-7 py-3 text-right text-sm tabular-nums">
-                          {diff === 0
-                            ? <span className="text-[var(--t-text-4)]">—</span>
-                            : <span className={diff > 0 ? 'text-[#6B9E78]' : 'text-[#A06060]'}>{diff > 0 ? '+' : ''}{diff}</span>
-                          }
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+        <div className="absolute inset-0 z-40 flex flex-col" style={{ background: 'var(--t-bg)' }}>
+          <PageHeader title="庫存盤點" meta="依序填入實際清點的數量，差異會即時顯示">
+            <button onClick={() => setChecking(false)} className={btnSecondary}>取消</button>
+            <button onClick={confirmStockcheck} disabled={saving} className={btnPrimary}>{saving ? '儲存中' : '確認盤點'}</button>
+          </PageHeader>
+          <div className="flex-1 overflow-auto px-4 pb-4 pt-3 lg:px-5 lg:pb-5">
+            <div className="rounded-2xl bg-surface px-2 py-2">
+              {session.entries.map(entry => {
+                const actual = Number(actuals[entry.id] ?? entry.expected)
+                const diff = actual - entry.expected
+                return (
+                  <div key={entry.id} className="flex min-h-16 items-center gap-3 border-b border-line-soft px-3.5 py-2 last:border-0">
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span className="truncate text-[15px] text-ink">{entry.itemName}</span>
+                      <span className="text-xs text-ink-muted">系統 {entry.expected} {entry.unit}</span>
+                    </span>
+                    <span className={`w-12 text-right text-sm font-bold ${diff === 0 ? 'text-ink-faint' : diff > 0 ? 'text-visit-green-ink' : 'text-visit-red-ink'}`}>
+                      {diff === 0 ? '—' : `${diff > 0 ? '+' : ''}${diff}`}
+                    </span>
+                    <input type="number" inputMode="numeric" aria-label={`${entry.itemName} 實際數量`}
+                      value={actuals[entry.id] ?? String(entry.expected)}
+                      onChange={e => setActuals(prev => ({ ...prev, [entry.id]: e.target.value }))}
+                      className={`${inputCls} num w-24 text-center text-lg`} />
+                  </div>
+                )
+              })}
             </div>
           </div>
         </div>
       )}
 
-      {/* Add / Edit modal */}
+      {/* ── 新增／編輯 ── */}
       {showModal && (
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-40 p-4 overflow-y-auto">
-          <div className="bg-[var(--t-surface)] border border-[var(--t-border)] w-full max-w-sm max-h-[calc(100%-2rem)] overflow-y-auto p-6 sm:p-8">
-            <div className="flex items-center justify-between mb-8">
-              <p className="text-[10px] tracking-[0.3em] text-[var(--t-text-2)] uppercase">{editing ? '編輯品項' : '新增品項'}</p>
-              <button onClick={() => { setAdding(false); setEditing(null) }} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none transition-colors">×</button>
-            </div>
-            <div className="space-y-5">
-              <Field label="品項名稱"><UInput value={form.name} onChange={v => setForm({ ...form, name: v })} placeholder="例：玻尿酸精華液" /></Field>
-              <Field label="品牌"><UInput value={form.brand} onChange={v => setForm({ ...form, brand: v })} placeholder="例：La Mer" /></Field>
-              <Field label="類別">
-                <select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}
-                  className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] transition-colors appearance-none cursor-pointer">
-                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                </select>
-              </Field>
-              <div className="grid grid-cols-2 gap-4">
-                <Field label="單位"><UInput value={form.unit} onChange={v => setForm({ ...form, unit: v })} placeholder="瓶 / 罐 / 個" /></Field>
-                <Field label="庫存量"><UInput type="number" value={form.quantity} onChange={v => setForm({ ...form, quantity: v })} placeholder="0" /></Field>
-              </div>
-              <Field label="低庫存警示"><UInput type="number" value={form.alertLevel} onChange={v => setForm({ ...form, alertLevel: v })} placeholder="5" /></Field>
-              <Field label="備註"><UInput value={form.note} onChange={v => setForm({ ...form, note: v })} placeholder="選填" /></Field>
-            </div>
-            <button onClick={handleSave} disabled={saving}
-              className="w-full mt-8 border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] disabled:opacity-40 py-2.5 text-[10px] tracking-[0.25em] uppercase transition-all duration-200">
+        <Modal title={editing ? '編輯品項' : '新增品項'} onClose={() => { setAdding(false); setEditing(null) }}
+          footer={<>
+            {editing && <button onClick={() => handleDelete(editing.id, editing.name)} className={btnDanger}>刪除</button>}
+            <button onClick={handleSave} disabled={saving || !form.name.trim()} className={`${btnPrimary} h-[50px] flex-1`}>
               {saving ? '儲存中' : editing ? '儲存變更' : '建立品項'}
             </button>
+          </>}>
+          <FormField label="品項名稱" htmlFor="inv-name">
+            <input id="inv-name" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="例：保濕精華液" className={inputCls} />
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="品牌（選填）" htmlFor="inv-brand">
+              <input id="inv-brand" value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} className={inputCls} />
+            </FormField>
+            <FormField label="分類" htmlFor="inv-cat">
+              <select id="inv-cat" value={form.category} onChange={e => setForm({ ...form, category: e.target.value })} className={`${inputCls} cursor-pointer`}>
+                {allCats.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </FormField>
           </div>
-        </div>
+          <div className="grid grid-cols-3 gap-3">
+            <FormField label="單位" htmlFor="inv-unit">
+              <input id="inv-unit" value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })} placeholder="瓶" className={inputCls} />
+            </FormField>
+            <FormField label="目前數量" htmlFor="inv-qty">
+              <input id="inv-qty" type="number" inputMode="numeric" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} placeholder="0" className={inputCls} />
+            </FormField>
+            <FormField label="安全庫存" htmlFor="inv-alert">
+              <input id="inv-alert" type="number" inputMode="numeric" value={form.alertLevel} onChange={e => setForm({ ...form, alertLevel: e.target.value })} placeholder="3" className={inputCls} />
+            </FormField>
+          </div>
+          <p className="-mt-2 text-xs text-ink-muted">數量低於或等於安全庫存時，會標示「低庫存」並出現在總覽。</p>
+          <FormField label="備註（選填）" htmlFor="inv-note">
+            <input id="inv-note" value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} className={inputCls} />
+          </FormField>
+        </Modal>
       )}
 
-      {/* Adjust stock modal */}
+      {/* ── 一次調整多個 ── */}
       {adjusting && (
-        <div className="absolute inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-40 p-4 overflow-y-auto">
-          <div className="bg-[var(--t-surface)] border border-[var(--t-border)] w-full max-w-xs max-h-[calc(100%-2rem)] overflow-y-auto p-6 sm:p-8">
-            <div className="flex items-center justify-between mb-6">
-              <p className="text-[10px] tracking-[0.3em] text-[var(--t-text-2)] uppercase">調整庫存</p>
-              <button onClick={() => setAdjusting(null)} className="text-[var(--t-text-4)] hover:text-[var(--t-text-2)] text-lg leading-none transition-colors">×</button>
-            </div>
-            <p className="text-sm font-light text-[var(--t-text)] mb-1">{adjusting.name}</p>
-            <p className="text-[10px] text-[var(--t-text-4)] tracking-wide mb-6">目前庫存：{adjusting.quantity} {adjusting.unit}</p>
-            <Field label="數量"><UInput type="number" value={adjustDelta} onChange={setAdjustDelta} placeholder="輸入數量" /></Field>
-            <div className="grid grid-cols-2 gap-3 mt-8">
-              <button onClick={() => handleAdjust(1)} disabled={saving || !adjustDelta}
-                className="border border-[var(--t-accent)] text-[var(--t-accent)] hover:bg-[var(--t-accent)] hover:text-[var(--t-accent-fg)] disabled:opacity-40 py-2.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">
-                進貨 +
-              </button>
-              <button onClick={() => handleAdjust(-1)} disabled={saving || !adjustDelta}
-                className="border border-[var(--t-border-s)] text-[var(--t-text-3)] hover:border-[#A06060] hover:text-[#A06060] disabled:opacity-40 py-2.5 text-[10px] tracking-[0.2em] uppercase transition-all duration-200">
-                出貨 −
-              </button>
-            </div>
-          </div>
-        </div>
+        <Modal title="調整數量" onClose={() => setAdjusting(null)}
+          footer={<>
+            <button onClick={() => handleAdjust(-1)} disabled={saving || !adjustDelta} className={`${btnOutline} h-[50px] flex-1`}>用掉 −</button>
+            <button onClick={() => handleAdjust(1)} disabled={saving || !adjustDelta} className={`${btnPrimary} h-[50px] flex-1`}>進貨 ＋</button>
+          </>}>
+          <p className="text-sm text-ink">
+            <span className="font-heading text-[17px] font-semibold">{adjusting.name}</span>
+            <span className="ml-2 text-ink-muted">目前 {adjusting.quantity} {adjusting.unit}</span>
+          </p>
+          <FormField label="數量" htmlFor="inv-delta">
+            <input id="inv-delta" type="number" inputMode="numeric" min={1} value={adjustDelta} onChange={e => setAdjustDelta(e.target.value)}
+              placeholder="輸入數量" className={inputCls} autoFocus />
+          </FormField>
+        </Modal>
       )}
     </div>
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+/** 數量加減：點數字可一次輸入多個 */
+function Stepper({ item, busy, onAdjust, onOpen }: { item: Item; busy: boolean; onAdjust: (d: number) => void; onOpen: () => void }) {
+  const btn = 'flex size-11 shrink-0 items-center justify-center rounded-full border border-border-input text-ink transition-colors hover:bg-surface-muted disabled:opacity-40'
   return (
-    <div>
-      <label className="text-[10px] text-[var(--t-text-3)] tracking-[0.25em] uppercase mb-2 block">{label}</label>
-      {children}
-    </div>
-  )
-}
-
-function UInput({ value, onChange, type = 'text', placeholder = '' }: { value: string; onChange: (v: string) => void; type?: string; placeholder?: string }) {
-  return (
-    <input type={type} value={value} placeholder={placeholder} onChange={e => onChange(e.target.value)}
-      className="w-full bg-transparent border-b border-[var(--t-border-s)] focus:border-[var(--t-accent)] focus:outline-none py-2 text-sm text-[var(--t-text)] placeholder:text-[var(--t-text-4)] transition-colors" />
+    <span className="flex items-center gap-1.5">
+      <button onClick={() => onAdjust(-1)} disabled={busy || item.quantity <= 0} aria-label={`${item.name} 減一`} className={btn}>
+        <Minus size={16} strokeWidth={1.6} />
+      </button>
+      <button onClick={onOpen} aria-label={`${item.name} 調整數量`} className="min-w-[56px] rounded-lg px-1 py-1 text-center hover:bg-surface-muted">
+        <span className="num text-[22px] font-semibold text-ink">{item.quantity}</span>
+        <span className="ml-1 text-xs text-ink-muted">{item.unit}</span>
+      </button>
+      <button onClick={() => onAdjust(1)} disabled={busy} aria-label={`${item.name} 加一`} className={btn}>
+        <Plus size={16} strokeWidth={1.6} />
+      </button>
+    </span>
   )
 }
