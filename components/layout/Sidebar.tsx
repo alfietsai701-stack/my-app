@@ -3,16 +3,17 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { KeyRound, LogOut, Plus } from 'lucide-react'
+import { KeyRound, Link2, LogOut, Plus } from 'lucide-react'
 import type { Permissions } from '@/lib/permissions'
 import { NAV_GROUPS, NEW_APPOINTMENT_HREF, canSee, handleNewAppointmentClick } from './nav-items'
 
 export default function Sidebar({
-  permissions, userName, onChangePassword, onLogout,
+  permissions, userName, onChangePassword, onLoginMethods, onLogout,
 }: {
   permissions: Permissions | null
   userName: string
   onChangePassword: () => void
+  onLoginMethods: () => void
   onLogout: () => void
 }) {
   const pathname = usePathname()
@@ -67,6 +68,10 @@ export default function Sidebar({
         <button onClick={onChangePassword}
           className="flex h-11 items-center gap-3 rounded-md px-3 text-ink transition-colors hover:bg-surface-muted">
           <KeyRound size={16} strokeWidth={1.6} />修改密碼
+        </button>
+        <button onClick={onLoginMethods}
+          className="flex h-11 items-center gap-3 rounded-md px-3 text-ink transition-colors hover:bg-surface-muted">
+          <Link2 size={16} strokeWidth={1.6} />登入方式
         </button>
         <button onClick={onLogout}
           className="flex h-11 items-center gap-3 rounded-md px-3 text-ink transition-colors hover:bg-surface-muted">

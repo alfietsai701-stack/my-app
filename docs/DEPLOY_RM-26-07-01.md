@@ -19,16 +19,7 @@ npx prisma generate
 | 變數 | 用途 | 必填 |
 |---|---|---|
 | `CRON_SECRET` | 前一日提醒 Cron 的授權金鑰（Vercel Cron 會自動帶入相同值） | 提醒功能必填 |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google 第三方登入 | 啟用才需 |
-| `NEXT_PUBLIC_ENABLE_GOOGLE_LOGIN` | 設 `1` 顯示「使用 Google 登入」按鈕 | 啟用才需 |
-| `LINE_LOGIN_CHANNEL_ID` / `LINE_LOGIN_CHANNEL_SECRET` | LINE Login（注意：與 Messaging API channel 不同，需在 LINE Developers 另建 LINE Login channel） | 啟用才需 |
-| `NEXT_PUBLIC_ENABLE_LINE_LOGIN` | 設 `1` 顯示「使用 LINE 登入」按鈕 | 啟用才需 |
-
-第三方登入的 **Callback URL** 需在各平台設定為：
-- Google：`https://<你的網域>/api/auth/oauth/google/callback`
-- LINE：`https://<你的網域>/api/auth/oauth/line/callback`
-
-> 第三方登入以 **email 對應既有管理員帳號**，不會自動建立帳號。請確保管理員的 Google/LINE email 與後台帳號 email 一致。
+| 第三方登入（Google / LINE / Facebook / Apple） | 已改版，請看 [DEPLOY_OAUTH.md](./DEPLOY_OAUTH.md) | 啟用才需 |
 
 ## 3. 前一日提醒 Cron
 
