@@ -95,8 +95,11 @@ Callback URL 的格式都是：`https://<你的網域>/api/auth/oauth/<平台>/c
 
 1. [Meta for Developers](https://developers.facebook.com/apps/) → 建立應用程式，使用案例選「透過 Facebook 登入驗證並向用戶索取資料」。
 2. 「Facebook 登入」→ 設定 →「有效的 OAuth 重新導向 URI」加入：`https://<你的網域>/api/auth/oauth/facebook/callback`
-3. 應用程式在「開發模式」時，只有在「應用程式角色」裡的人能登入。只給三位管理員用的話，把三個人加成測試人員就好，不用送審；要切換成「上線模式」則需要填隱私權政策網址等資料。
-4. 系統只要 `public_profile` 權限（使用者 ID 和名稱），不要 email。
+3. 「應用程式設定 → 基本資料」：
+   - 隱私政策網址：`https://<你的網域>/privacy`
+   - 用戶資料刪除：選「資料刪除指示網址」，填 `https://<你的網域>/privacy#data-deletion`
+4. 應用程式在「開發模式」時，只有在「應用程式角色」裡的人能登入。只給三位管理員用的話，把三個人加成測試人員就好，不用送審；要切換成「上線模式」則需要填隱私權政策網址等資料。
+5. 系統只要 `public_profile` 權限（使用者 ID 和名稱），不要 email。
 
 | 變數 | 值 |
 |---|---|
