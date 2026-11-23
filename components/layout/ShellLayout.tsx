@@ -1,12 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { Home, Calendar, Users, Menu, Plus, KeyRound, LogOut, X } from 'lucide-react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useState } from 'react'
+import { Home, Calendar, Users, Menu, Plus, KeyRound, Link2, LogOut, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Sidebar from './Sidebar'
 import PasswordModal from './PasswordModal'
+import LoginMethodsModal from './LoginMethodsModal'
 import WhatsNewBanner from './WhatsNewBanner'
 import { NAV_GROUPS, NEW_APPOINTMENT_HREF, canSee, handleNewAppointmentClick } from './nav-items'
 import type { Permissions } from '@/lib/permissions'
@@ -26,6 +27,7 @@ export default function ShellLayout({
   const router = useRouter()
   const [showPw, setShowPw] = useState(false)
   const [showMore, setShowMore] = useState(false)
+  const [showLoginMethods, setShowLoginMethods] = useState(false)
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' })
@@ -41,7 +43,7 @@ export default function ShellLayout({
       {/* ── Desktop sidebar ── */}
       <div className="hidden shrink-0 lg:flex">
         <Sidebar permissions={permissions} userName={userName}
-          onChangePassword={() => setShowPw(true)} onLogout={handleLogout} />
+          onChangePassword={() => setShowPw(true)} onLoginMethods={() => setShowLoginMethods(true)} onLogout={handleLogout} />
       </div>
 
       {/* ── Main content ── */}
@@ -109,6 +111,10 @@ export default function ShellLayout({
                 className="flex h-[52px] w-full items-center gap-3.5 rounded-lg px-3 text-[15px] text-ink">
                 <KeyRound size={19} strokeWidth={1.6} />修改密碼
               </button>
+              <button onClick={() => { setShowMore(false); setShowLoginMethods(true) }}
+                className="flex h-[52px] w-full items-center gap-3.5 rounded-lg px-3 text-[15px] text-ink">
+                <Link2 size={19} strokeWidth={1.6} />登入方式
+              </button>
               <button onClick={handleLogout}
                 className="flex h-[52px] w-full items-center gap-3.5 rounded-lg px-3 text-[15px] text-ink">
                 <LogOut size={19} strokeWidth={1.6} />登出
@@ -119,8 +125,27 @@ export default function ShellLayout({
       )}
 
       {showPw && <PasswordModal onClose={() => setShowPw(false)} />}
+      {showLoginMethods && <LoginMethodsModal onClose={() => setShowLoginMethods(false)} />}
+      <Suspense fallback={null}><LoginMethodsFromUrl /></Suspense>
     </div>
   )
+}
+
+/** 第三方綁定完成後會帶 ?login_methods=1 回來：自動打開「登入方式」顯示結果，關掉時把參數清掉 */
+function LoginMethodsFromUrl() {
+  const searchParams = useSearchParams()
+  const pathname = usePathname()
+  const router = useRouter()
+  if (searchParams.get('login_methods') !== '1') return null
+
+  const flash = { linked: searchParams.get('linked'), error: searchParams.get('oauth_error') }
+  function close() {
+    const rest = new URLSearchParams(searchParams.toString())
+    for (const k of ['login_methods', 'linked', 'oauth_error']) rest.delete(k)
+    const qs = rest.toString()
+    router.replace(pathname + (qs ? `?${qs}` : ''), { scroll: false })
+  }
+  return <LoginMethodsModal flash={flash} onClose={close} />
 }
 
 function TabLink({ href, icon: Icon, label, active }: { href: string; icon: LucideIcon; label: string; active: boolean }) {

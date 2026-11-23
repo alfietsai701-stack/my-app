@@ -132,4 +132,21 @@ model AdminUser {
   name         String
   permissions  Json     @default("{}")
   createdAt    DateTime @default(now())
+  oauthAccounts OAuthAccount[]
+}
+
+// 第三方登入綁定：以「平台 + 平台使用者 ID」對應管理員帳號（不靠 email，Apple 隱藏信箱、FB/LINE 沒信箱也能用）
+model OAuthAccount {
+  id             String    @id @default(cuid())
+  provider       String    // google | line | facebook | apple
+  providerUserId String    // 各平台的 sub / user id
+  adminUserId    String
+  displayName    String?   // 綁定時平台回傳的名稱，只用來在畫面上辨識
+  email          String?   // 綁定時平台回傳的 email（可能沒有、可能是 Apple 轉寄地址）
+  createdAt      DateTime  @default(now())
+  lastUsedAt     DateTime?
+  adminUser      AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerUserId])
+  @@unique([adminUserId, provider])
 }

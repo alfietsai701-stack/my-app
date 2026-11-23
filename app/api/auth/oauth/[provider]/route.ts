@@ -1,30 +1,37 @@
 import { NextRequest, NextResponse } from 'next/server'
-import crypto from 'crypto'
-import { providerConfig, isProviderEnabled, redirectUri, type OAuthProvider } from '@/lib/oauth'
+import { getSession } from '@/lib/auth-server'
+import {
+  appOrigin, buildAuthorizeUrl, isOAuthProvider, isProviderEnabled, randomToken,
+  safeReturnPath, signState, stateCookieOptions, STATE_COOKIE,
+} from '@/lib/oauth'
 
-// 導向第三方授權頁（Google / LINE）
+// 導向第三方授權頁。
+//   /api/auth/oauth/google              → 用 Google 登入
+//   /api/auth/oauth/google?mode=bind    → 已登入者綁定 Google（需要 session）
 export async function GET(req: NextRequest, { params }: { params: Promise<{ provider: string }> }) {
   const { provider } = await params
-  const p = provider as OAuthProvider
-  const cfg = providerConfig(p)
-  if (!cfg || !isProviderEnabled(p)) {
-    return NextResponse.redirect(new URL('/login?error=provider_disabled', req.url))
+  const origin = appOrigin(req.nextUrl.origin)
+
+  if (!isOAuthProvider(provider) || !isProviderEnabled(provider)) {
+    return NextResponse.redirect(new URL('/login?error=provider_disabled', origin))
   }
 
-  const origin = req.nextUrl.origin
-  const state = crypto.randomBytes(16).toString('hex')
+  const mode = req.nextUrl.searchParams.get('mode') === 'bind' ? 'bind' : 'login'
+  let userId: string | undefined
+  if (mode === 'bind') {
+    const session = await getSession()
+    if (!session) return NextResponse.redirect(new URL('/login', origin))
+    userId = session.id
+  }
 
-  const url = new URL(cfg.authorizeUrl)
-  url.searchParams.set('response_type', 'code')
-  url.searchParams.set('client_id', cfg.clientId!)
-  url.searchParams.set('redirect_uri', redirectUri(origin, p))
-  url.searchParams.set('scope', cfg.scope)
-  url.searchParams.set('state', state)
-
-  const res = NextResponse.redirect(url)
-  res.cookies.set('oauth_state', state, {
-    httpOnly: true, secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax', maxAge: 600, path: '/',
+  const state = randomToken()
+  const nonce = randomToken()
+  const token = await signState({
+    state, nonce, provider, mode, userId,
+    returnTo: mode === 'bind' ? safeReturnPath(req.nextUrl.searchParams.get('return')) : undefined,
   })
+
+  const res = NextResponse.redirect(buildAuthorizeUrl(provider, { origin, state, nonce }))
+  res.cookies.set(STATE_COOKIE, token, stateCookieOptions)
   return res
 }
