@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Image from 'next/image'
 import { Eye, EyeOff } from 'lucide-react'
 import { PROVIDER_LABEL, type OAuthProvider } from '@/lib/oauth-labels'
+import { APP_VERSION_LABEL } from '@/lib/version'
 
 const ERROR_MESSAGES: Record<string, string> = {
   not_linked: '這個第三方帳號還沒綁定後台帳號。請先用帳號密碼登入，到「登入方式」完成綁定，之後就能直接用它登入。',
@@ -106,6 +107,7 @@ export default function LoginForm({ providers, errorCode }: { providers: OAuthPr
               </div>
             </>
           )}
+          <p className="pt-2 text-center text-xs text-[#8F8F87]">系統版本 {APP_VERSION_LABEL}</p>
         </form>
       </section>
     </div>

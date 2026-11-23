@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { KeyRound, Link2, LogOut, Plus } from 'lucide-react'
 import type { Permissions } from '@/lib/permissions'
+import { APP_VERSION_LABEL } from '@/lib/version'
 import { NAV_GROUPS, NEW_APPOINTMENT_HREF, canSee, handleNewAppointmentClick } from './nav-items'
 
 export default function Sidebar({
@@ -77,6 +78,7 @@ export default function Sidebar({
           className="flex h-11 items-center gap-3 rounded-md px-3 text-ink transition-colors hover:bg-surface-muted">
           <LogOut size={16} strokeWidth={1.6} />登出
         </button>
+        <p className="px-3 pt-2 text-xs text-ink-muted" title="系統版本">系統版本 {APP_VERSION_LABEL}</p>
       </div>
     </aside>
   )

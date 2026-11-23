@@ -11,6 +11,7 @@ import LoginMethodsModal from './LoginMethodsModal'
 import WhatsNewBanner from './WhatsNewBanner'
 import { NAV_GROUPS, NEW_APPOINTMENT_HREF, canSee, handleNewAppointmentClick } from './nav-items'
 import type { Permissions } from '@/lib/permissions'
+import { APP_VERSION_LABEL } from '@/lib/version'
 
 export default function ShellLayout({
   children,
@@ -120,6 +121,7 @@ export default function ShellLayout({
                 <LogOut size={19} strokeWidth={1.6} />登出
               </button>
             </div>
+            <p className="px-3 pt-1 text-xs text-ink-muted">系統版本 {APP_VERSION_LABEL}</p>
           </div>
         </div>
       )}
