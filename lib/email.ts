@@ -9,12 +9,27 @@ type BookingEmailParams = {
   note?: string
 }
 
+// 顧客在公開預約頁填的內容（姓名、備註…）放進 HTML 前一律跳脫，
+// 避免有人塞入連結、圖片或假內容，讓工作室名義寄出的信變成釣魚信。
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export async function sendBookingEmail(params: BookingEmailParams): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   if (!apiKey) { console.warn('RESEND_API_KEY 未設定，略過 email'); return }
 
-  const businessName = process.env.LINE_BUSINESS_NAME ?? '美業管理系統'
-  const { to, name, serviceName, date, time, durationMin, price, note } = params
+  const businessNameRaw = process.env.LINE_BUSINESS_NAME ?? '美業管理系統'
+  const businessName = escapeHtml(businessNameRaw)
+  const { to, date, time, durationMin, price } = params
+  const name = escapeHtml(params.name)
+  const serviceName = escapeHtml(params.serviceName)
+  const note = params.note ? escapeHtml(params.note).replace(/\n/g, '<br/>') : ''
   const [y, m, d] = date.split('-')
   const dateStr = `${y}年${m}月${d}日`
 
@@ -53,7 +68,7 @@ export async function sendBookingEmail(params: BookingEmailParams): Promise<void
 </body>
 </html>`
 
-  const from = process.env.EMAIL_FROM ?? `${businessName} <onboarding@resend.dev>`
+  const from = process.env.EMAIL_FROM ?? `${businessNameRaw} <onboarding@resend.dev>`
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -61,7 +76,7 @@ export async function sendBookingEmail(params: BookingEmailParams): Promise<void
     body: JSON.stringify({
       from,
       to: [to],
-      subject: `✅ 預約確認 - ${serviceName}（${dateStr} ${time}）`,
+      subject: `✅ 預約確認 - ${params.serviceName}（${dateStr} ${time}）`,
       html,
     }),
   })

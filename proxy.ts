@@ -14,6 +14,8 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/book') ||
     pathname.startsWith('/api/line') ||
+    // Vercel Cron 不帶登入 cookie；授權改由 route 內的 CRON_SECRET 檢查
+    pathname.startsWith('/api/cron') ||
     /\.(png|jpg|jpeg|gif|webp|svg|ico)$/.test(pathname)
   ) {
     return NextResponse.next()
